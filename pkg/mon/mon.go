@@ -1,9 +1,11 @@
 package mon
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,7 +15,6 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"os/signal"
 )
 
 type Opts struct {
@@ -32,15 +33,15 @@ func (o *Opts) OK() error {
 
 type Mon struct {
 	*Opts
-	mu                 sync.Mutex
-	initialHash        string
-	lastProcessedHash  string
-	filesCreated       int64
-	filesDeleted       int64
-	commits            int64
-	linesAdded         int64
-	linesDeleted       int64
-	gitLogPath         string
+	mu                sync.Mutex
+	initialHash       string
+	lastProcessedHash string
+	filesCreated      int64
+	filesDeleted      int64
+	commits           int64
+	linesAdded        int64
+	linesDeleted      int64
+	gitLogPath        string
 }
 
 func New(opts *Opts) (*Mon, error) {
@@ -72,7 +73,7 @@ func New(opts *Opts) (*Mon, error) {
 	return mon, nil
 }
 
-func (m *Mon) Run() error {
+func (m *Mon) Run(_ context.Context) error {
 	if _, err := os.Stat(m.gitLogPath); err != nil {
 		return fmt.Errorf("git logs not found at %s", m.gitLogPath)
 	}
@@ -132,7 +133,7 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 				return
 			}
 
-			if event.Name == m.gitLogPath && (event.Op & (fsnotify.Write | fsnotify.Chmod) != 0) {
+			if event.Name == m.gitLogPath && (event.Op&(fsnotify.Write|fsnotify.Chmod) != 0) {
 				go m.processGitChange(displayCh)
 				continue
 			}
@@ -142,16 +143,16 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 			}
 
 			switch {
-			case event.Op & fsnotify.Create != 0:
+			case event.Op&fsnotify.Create != 0:
 				atomic.AddInt64(&m.filesCreated, 1)
 				m.triggerDisplay(displayCh)
 				if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
 					m.addRecursiveWatchesForDir(watcher, event.Name)
 				}
-			case event.Op & fsnotify.Remove != 0:
+			case event.Op&fsnotify.Remove != 0:
 				atomic.AddInt64(&m.filesDeleted, 1)
 				m.triggerDisplay(displayCh)
-			case event.Op & fsnotify.Rename != 0:
+			case event.Op&fsnotify.Rename != 0:
 				atomic.AddInt64(&m.filesCreated, 1)
 				atomic.AddInt64(&m.filesDeleted, 1)
 				m.triggerDisplay(displayCh)
@@ -230,7 +231,7 @@ func (m *Mon) parseShortstat(stat string) (int64, int64) {
 	if i == -1 {
 		return 0, 0
 	}
-	addStr := stat[strings.LastIndex(stat[:i], " ") +1 : i]
+	addStr := stat[strings.LastIndex(stat[:i], " ")+1 : i]
 	addStr = strings.TrimSpace(addStr)
 	added, _ := strconv.ParseInt(addStr, 10, 64)
 
@@ -238,7 +239,7 @@ func (m *Mon) parseShortstat(stat string) (int64, int64) {
 	if d == -1 {
 		return added, 0
 	}
-	delStr := stat[i + len("insertions(+)") : d]
+	delStr := stat[i+len("insertions(+)") : d]
 	delStr = strings.TrimSpace(delStr)
 	deleted, _ := strconv.ParseInt(delStr, 10, 64)
 

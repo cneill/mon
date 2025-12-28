@@ -39,7 +39,7 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if err := mon.Run(); err != nil {
+	if err := mon.Run(ctx); err != nil {
 		return fmt.Errorf("mon error: %w", err)
 	}
 
