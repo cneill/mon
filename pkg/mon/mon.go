@@ -3,6 +3,7 @@ package mon
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -38,12 +39,13 @@ type Mon struct {
 	mutex             sync.Mutex
 	initialHash       string
 	lastProcessedHash string
-	filesCreated      int64
-	filesDeleted      int64
-	commits           int64
-	linesAdded        int64
-	linesDeleted      int64
+	filesCreated      atomic.Int64
+	filesDeleted      atomic.Int64
+	commits           atomic.Int64
+	linesAdded        atomic.Int64
+	linesDeleted      atomic.Int64
 	gitLogPath        string
+	currentFiles      sync.Map // Tracks current files (initial + runtime changes)
 }
 
 func New(opts *Opts) (*Mon, error) {
@@ -57,6 +59,7 @@ func New(opts *Opts) (*Mon, error) {
 	}
 
 	hashCmd := exec.Command("git", "-C", opts.ProjectDir, "rev-parse", "HEAD")
+
 	hashBytes, err := hashCmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get initial HEAD: %w", err)
@@ -72,6 +75,33 @@ func New(opts *Opts) (*Mon, error) {
 		lastProcessedHash: initialHash,
 		gitLogPath:        gitLogPath,
 	}
+
+	// Scan initial files (non-dirs, skip .git)
+	scanErr := filepath.WalkDir(opts.ProjectDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() || strings.Contains(path, ".git") {
+			if d.IsDir() && filepath.Base(path) == ".git" {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		mon.currentFiles.Store(path, struct{}{})
+
+		return nil
+	})
+	if scanErr != nil {
+		return nil, fmt.Errorf("failed to scan initial files: %w", scanErr)
+	}
+
+	mon.currentFiles.Range(func(k, _ any) bool {
+		fmt.Println(k.(string))
+		return true
+	})
 
 	return mon, nil
 }
@@ -142,30 +172,43 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 				return
 			}
 
+			if m.ignoreEvent(event) {
+				continue
+			}
+
 			if event.Name == m.gitLogPath && (event.Op&(fsnotify.Write|fsnotify.Chmod) != 0) {
 				go m.processGitChange(displayCh)
 				continue
 			}
 
-			if strings.Contains(event.Name, ".git") {
-				continue
-			}
-
 			switch {
 			case event.Op&fsnotify.Create != 0:
-				atomic.AddInt64(&m.filesCreated, 1)
-				m.triggerDisplay(displayCh)
+				// Only count true new files (not already tracked)
+				if _, exists := m.currentFiles.Load(event.Name); !exists {
+					slog.Debug("added file", "name", event.Name)
+					m.filesCreated.Add(1)
+					m.currentFiles.Store(event.Name, struct{}{})
+					m.triggerDisplay(displayCh)
+				}
 
 				if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
 					m.addRecursiveWatchesForDir(watcher, event.Name)
 				}
 			case event.Op&fsnotify.Remove != 0:
-				atomic.AddInt64(&m.filesDeleted, 1)
-				m.triggerDisplay(displayCh)
+				// Only count if tracked
+				if _, exists := m.currentFiles.Load(event.Name); exists {
+					slog.Debug("deleted file", "name", event.Name)
+					m.filesDeleted.Add(1)
+					m.currentFiles.Delete(event.Name)
+					m.triggerDisplay(displayCh)
+				}
 			case event.Op&fsnotify.Rename != 0:
-				atomic.AddInt64(&m.filesCreated, 1)
-				atomic.AddInt64(&m.filesDeleted, 1)
-				m.triggerDisplay(displayCh)
+				// Treat as deletion of old name (new name will trigger Create)
+				if _, exists := m.currentFiles.Load(event.Name); exists {
+					m.filesDeleted.Add(1)
+					m.currentFiles.Delete(event.Name)
+					m.triggerDisplay(displayCh)
+				}
 			}
 
 		case <-watcher.Errors:
@@ -173,14 +216,30 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 	}
 }
 
+func (m *Mon) ignoreEvent(event fsnotify.Event) bool {
+	if strings.HasPrefix(event.Name, ".git") {
+		return true
+	}
+
+	// Ignore editor temp files: backups (~, .swp), swap (numeric names)
+	base := filepath.Base(event.Name)
+	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {
+		return true
+	}
+
+	return false
+}
+
 func (m *Mon) addRecursiveWatchesForDir(watcher *fsnotify.Watcher, dir string) error {
 	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
+
 		if d.IsDir() && !strings.Contains(path, ".git") {
 			watcher.Add(path)
 		}
+
 		return nil
 	})
 }
@@ -215,7 +274,7 @@ func (m *Mon) processGitChange(displayCh chan<- struct{}) {
 		return
 	}
 
-	atomic.StoreInt64(&m.commits, commitsTotal)
+	m.commits.Store(commitsTotal)
 
 	diffCmd := exec.Command("git", "-C", m.ProjectDir, "diff", "--shortstat", m.initialHash+".."+newHash)
 
@@ -225,8 +284,8 @@ func (m *Mon) processGitChange(displayCh chan<- struct{}) {
 	}
 
 	added, deleted := m.parseShortstat(string(diffBytes))
-	atomic.StoreInt64(&m.linesAdded, added)
-	atomic.StoreInt64(&m.linesDeleted, deleted)
+	m.linesAdded.Store(added)
+	m.linesDeleted.Store(deleted)
 
 	m.lastProcessedHash = newHash
 	m.triggerDisplay(displayCh)
@@ -245,25 +304,37 @@ func (m *Mon) parseShortstat(stat string) (int64, int64) {
 		return 0, 0
 	}
 
-	i := strings.Index(stat, "insertions(+)")
-	if i == -1 {
+	insertionsIdx := strings.Index(stat, "insertions(+)")
+	if insertionsIdx == -1 {
 		return 0, 0
 	}
 
-	addStr := stat[strings.LastIndex(stat[:i], " ")+1 : i]
+	addStr := stat[strings.LastIndex(stat[:insertionsIdx], " ")+1 : insertionsIdx]
 	addStr = strings.TrimSpace(addStr)
 	added, _ := strconv.ParseInt(addStr, 10, 64)
 
-	d := strings.Index(stat, "deletions(-)")
-	if d == -1 {
+	deletionsIdx := strings.Index(stat, "deletions(-)")
+	if deletionsIdx == -1 {
 		return added, 0
 	}
 
-	delStr := stat[i+len("insertions(+)") : d]
+	delStr := stat[insertionsIdx+len("insertions(+)") : deletionsIdx]
 	delStr = strings.TrimSpace(delStr)
 	deleted, _ := strconv.ParseInt(delStr, 10, 64)
 
 	return added, deleted
+}
+
+func isNumeric(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Mon) displayLoop(displayCh <-chan struct{}) {
@@ -285,11 +356,11 @@ func (m *Mon) displayLoop(displayCh <-chan struct{}) {
 
 func (m *Mon) getStatusSnapshot() *statusSnapshot {
 	return &statusSnapshot{
-		FilesCreated: atomic.LoadInt64(&m.filesCreated),
-		FilesDeleted: atomic.LoadInt64(&m.filesDeleted),
-		Commits:      atomic.LoadInt64(&m.commits),
-		LinesAdded:   atomic.LoadInt64(&m.linesAdded),
-		LinesDeleted: atomic.LoadInt64(&m.linesDeleted),
+		FilesCreated: m.filesCreated.Load(),
+		FilesDeleted: m.filesDeleted.Load(),
+		Commits:      m.commits.Load(),
+		LinesAdded:   m.linesAdded.Load(),
+		LinesDeleted: m.linesDeleted.Load(),
 	}
 }
 
@@ -308,7 +379,7 @@ func (s *statusSnapshot) String() string {
 	builder.WriteString(" / ")
 	builder.WriteString(color.RedString("-" + strconv.FormatInt(s.FilesDeleted, 10)))
 	builder.WriteString(" || Commits: ")
-	builder.WriteString(color.YellowString("%d", s.Commits))
+	builder.WriteString(color.YellowString(strconv.FormatInt(s.Commits, 10)))
 	builder.WriteString(" || Lines: ")
 	builder.WriteString(color.GreenString("+" + strconv.FormatInt(s.LinesAdded, 10)))
 	builder.WriteString(" / ")
@@ -325,7 +396,7 @@ func (s *statusSnapshot) Final() string {
 	builder.WriteString(" - Files: ")
 	builder.WriteString(color.GreenString(strconv.FormatInt(s.FilesCreated, 10) + " created"))
 	builder.WriteString(" / ")
-	builder.WriteString(color.RedString(strconv.FormatInt(s.FilesCreated, 10) + " deleted"))
+	builder.WriteString(color.RedString(strconv.FormatInt(s.FilesDeleted, 10) + " deleted"))
 	builder.WriteRune('\n')
 
 	builder.WriteString(" - Commits: " + color.YellowString("+"+strconv.FormatInt(s.Commits, 10)) + "\n")
