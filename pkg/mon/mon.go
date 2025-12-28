@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cneill/mon/pkg/git"
 	"github.com/fatih/color"
 	"github.com/fsnotify/fsnotify"
 )
@@ -28,6 +29,14 @@ type Opts struct {
 func (o *Opts) OK() error {
 	if o.ProjectDir == "" {
 		return fmt.Errorf("must supply project dir")
+	}
+
+	if _, err := os.Stat(o.ProjectDir); err != nil {
+		return fmt.Errorf("failed to stat project dir: %w", err)
+	}
+
+	if err := git.InGitDir(context.TODO(), o.ProjectDir); err != nil {
+		return err //nolint:wrapcheck
 	}
 
 	return nil
@@ -56,21 +65,15 @@ func New(opts *Opts) (*Mon, error) {
 		return nil, fmt.Errorf("failed to configure mon: %w", err)
 	}
 
-	cmd := exec.Command("git", "-C", opts.ProjectDir, "rev-parse", "--is-inside-work-tree")
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("%s is not a git repository", opts.ProjectDir)
-	}
-
-	hashCmd := exec.Command("git", "-C", opts.ProjectDir, "rev-parse", "HEAD")
-
-	hashBytes, err := hashCmd.Output()
+	initialHash, err := git.GetHEADSha(context.TODO(), opts.ProjectDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get initial HEAD: %w", err)
+		return nil, fmt.Errorf("failed to get initial git HEAD SHA: %w", err)
 	}
-
-	initialHash := strings.TrimSpace(string(hashBytes))
 
 	gitLogPath := filepath.Join(opts.ProjectDir, ".git", "logs", "HEAD")
+	if _, err := os.Stat(gitLogPath); err != nil {
+		return nil, fmt.Errorf("git logs not found at %s", gitLogPath)
+	}
 
 	mon := &Mon{
 		Opts:              opts,
@@ -81,13 +84,13 @@ func New(opts *Opts) (*Mon, error) {
 	}
 
 	// Scan initial files (non-dirs, skip .git)
-	scanErr := filepath.WalkDir(opts.ProjectDir, func(path string, d os.DirEntry, err error) error {
+	scanErr := filepath.WalkDir(opts.ProjectDir, func(path string, de os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if d.IsDir() || strings.Contains(path, ".git") {
-			if d.IsDir() && filepath.Base(path) == ".git" {
+		if de.IsDir() || strings.Contains(path, ".git") {
+			if de.IsDir() && filepath.Base(path) == ".git" {
 				return filepath.SkipDir
 			}
 
@@ -106,17 +109,13 @@ func New(opts *Opts) (*Mon, error) {
 }
 
 func (m *Mon) Run(_ context.Context) error {
-	if _, err := os.Stat(m.gitLogPath); err != nil {
-		return fmt.Errorf("git logs not found at %s", m.gitLogPath)
-	}
-
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create watcher: %w", err)
 	}
 	defer watcher.Close()
 
-	if err := m.addRecursiveWatches(watcher); err != nil {
+	if err := m.addRecursiveWatchesForDir(watcher, m.ProjectDir); err != nil {
 		return err
 	}
 
@@ -141,28 +140,6 @@ func (m *Mon) Run(_ context.Context) error {
 	m.printFinalStats()
 
 	return nil
-}
-
-func (m *Mon) addRecursiveWatches(watcher *fsnotify.Watcher) error {
-	return filepath.WalkDir(m.ProjectDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !d.IsDir() {
-			return nil
-		}
-
-		if filepath.Base(path) == ".git" {
-			return filepath.SkipDir
-		}
-
-		if err := watcher.Add(path); err != nil {
-			return fmt.Errorf("failed to watch directory %q: %w", path, err)
-		}
-
-		return nil
-	})
 }
 
 type pendingDelete struct {
@@ -242,7 +219,8 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 				}
 			}
 
-		case <-watcher.Errors:
+		case err := <-watcher.Errors:
+			slog.Error("watcher error", "error", err)
 		}
 	}
 }
@@ -275,6 +253,7 @@ func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
 
 			if time.Since(pd.timestamp) > m.deleteTimeout {
 				m.pendingDeletes.Delete(key)
+
 				if pd.wasNewFile {
 					// New file deleted: decrement created count (net zero)
 					m.filesCreated.Add(-1)
@@ -284,6 +263,7 @@ func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
 					m.filesDeleted.Add(1)
 					slog.Debug("confirmed delete (initial file)", "name", key)
 				}
+
 				m.triggerDisplay(displayCh)
 			}
 
@@ -293,33 +273,39 @@ func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
 }
 
 func (m *Mon) addRecursiveWatchesForDir(watcher *fsnotify.Watcher, dir string) error {
-	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if d.IsDir() && !strings.Contains(path, ".git") {
-			watcher.Add(path)
+		if !d.IsDir() {
+			return nil
+		}
+
+		if strings.Contains(path, ".git") {
+			return filepath.SkipDir
+		}
+
+		if err := watcher.Add(path); err != nil {
+			return fmt.Errorf("failed to add watcher for directory %q: %w", path, err)
 		}
 
 		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("failed to recursively add dir watches: %w", err)
+	}
+
+	return nil
 }
 
 func (m *Mon) processGitChange(displayCh chan<- struct{}) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	cmd := exec.Command("git", "-C", m.ProjectDir, "rev-parse", "HEAD")
-
-	hashBytes, err := cmd.Output()
+	newHash, err := git.GetHEADSha(context.TODO(), m.ProjectDir)
 	if err != nil {
-		return
-	}
-
-	newHash := strings.TrimSpace(string(hashBytes))
-	if newHash == m.lastProcessedHash {
-		return
+		slog.Error("failed to get new git SHA", "error", err)
 	}
 
 	countCmd := exec.Command("git", "-C", m.ProjectDir, "rev-list", "--count", m.initialHash+".."+newHash)
