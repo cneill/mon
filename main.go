@@ -10,6 +10,7 @@ import (
 
 	"github.com/cneill/mon/internal/version"
 	"github.com/cneill/mon/pkg/mon"
+	"github.com/fatih/color"
 )
 
 func run(ctx context.Context) error {
@@ -28,6 +29,8 @@ func run(ctx context.Context) error {
 }
 
 func setupMon(ctx context.Context, cmd *cli.Command) error {
+	color.NoColor = cmd.Bool(FlagNoColor)
+
 	opts := &mon.Opts{
 		GitWatch:   cmd.Bool(FlagGitWatch),
 		NoColor:    cmd.Bool(FlagNoColor),
