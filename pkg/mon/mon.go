@@ -45,7 +45,10 @@ type Mon struct {
 	linesAdded        atomic.Int64
 	linesDeleted      atomic.Int64
 	gitLogPath        string
-	currentFiles      sync.Map // Tracks current files (initial + runtime changes)
+	initialFiles      sync.Map // Tracks initial files on start (read-only after init)
+	newFiles          sync.Map // Tracks files created after initialization
+	pendingDeletes    sync.Map // key: string path, value: pendingDelete
+	deleteTimeout     time.Duration
 }
 
 func New(opts *Opts) (*Mon, error) {
@@ -74,6 +77,7 @@ func New(opts *Opts) (*Mon, error) {
 		initialHash:       initialHash,
 		lastProcessedHash: initialHash,
 		gitLogPath:        gitLogPath,
+		deleteTimeout:     250 * time.Millisecond,
 	}
 
 	// Scan initial files (non-dirs, skip .git)
@@ -90,18 +94,13 @@ func New(opts *Opts) (*Mon, error) {
 			return nil
 		}
 
-		mon.currentFiles.Store(path, struct{}{})
+		mon.initialFiles.Store(path, struct{}{})
 
 		return nil
 	})
 	if scanErr != nil {
 		return nil, fmt.Errorf("failed to scan initial files: %w", scanErr)
 	}
-
-	mon.currentFiles.Range(func(k, _ any) bool {
-		fmt.Println(k.(string))
-		return true
-	})
 
 	return mon, nil
 }
@@ -128,6 +127,8 @@ func (m *Mon) Run(_ context.Context) error {
 	displayCh := make(chan struct{}, 10)
 
 	go m.handleEvents(watcher, displayCh)
+
+	go m.processPendingDeletes(displayCh)
 
 	go m.displayLoop(displayCh)
 
@@ -164,6 +165,11 @@ func (m *Mon) addRecursiveWatches(watcher *fsnotify.Watcher) error {
 	})
 }
 
+type pendingDelete struct {
+	timestamp  time.Time
+	wasNewFile bool // true if file was in newFiles, false if in initialFiles
+}
+
 func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{}) {
 	for {
 		select {
@@ -183,31 +189,56 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 
 			switch {
 			case event.Op&fsnotify.Create != 0:
-				// Only count true new files (not already tracked)
-				if _, exists := m.currentFiles.Load(event.Name); !exists {
+				// Check for matching pending delete
+				if pdI, pending := m.pendingDeletes.LoadAndDelete(event.Name); pending {
+					pd := pdI.(pendingDelete)
+					if pd.wasNewFile {
+						// Restore to newFiles, no count change needed
+						m.newFiles.Store(event.Name, struct{}{})
+					} else {
+						// Restore to initialFiles, no count change needed
+						m.initialFiles.Store(event.Name, struct{}{})
+					}
+
+					slog.Debug("ignored delete+create pair", "name", event.Name)
+
+					continue
+				}
+
+				// Only count if not already tracked in either map
+				_, inInitial := m.initialFiles.Load(event.Name)
+				_, inNew := m.newFiles.Load(event.Name)
+
+				if !inInitial && !inNew {
 					slog.Debug("added file", "name", event.Name)
 					m.filesCreated.Add(1)
-					m.currentFiles.Store(event.Name, struct{}{})
+					m.newFiles.Store(event.Name, struct{}{})
 					m.triggerDisplay(displayCh)
 				}
 
 				if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
 					m.addRecursiveWatchesForDir(watcher, event.Name)
 				}
-			case event.Op&fsnotify.Remove != 0:
-				// Only count if tracked
-				if _, exists := m.currentFiles.Load(event.Name); exists {
-					slog.Debug("deleted file", "name", event.Name)
-					m.filesDeleted.Add(1)
-					m.currentFiles.Delete(event.Name)
-					m.triggerDisplay(displayCh)
+
+			case event.Op&(fsnotify.Remove|fsnotify.Rename) != 0:
+				// Check if in newFiles first
+				if _, exists := m.newFiles.LoadAndDelete(event.Name); exists {
+					slog.Debug("pending delete (new file)", "name", event.Name)
+					m.pendingDeletes.Store(event.Name, pendingDelete{
+						timestamp:  time.Now(),
+						wasNewFile: true,
+					})
+
+					continue
 				}
-			case event.Op&fsnotify.Rename != 0:
-				// Treat as deletion of old name (new name will trigger Create)
-				if _, exists := m.currentFiles.Load(event.Name); exists {
-					m.filesDeleted.Add(1)
-					m.currentFiles.Delete(event.Name)
-					m.triggerDisplay(displayCh)
+
+				// Check if in initialFiles
+				if _, exists := m.initialFiles.LoadAndDelete(event.Name); exists {
+					slog.Debug("pending delete (initial file)", "name", event.Name)
+					m.pendingDeletes.Store(event.Name, pendingDelete{
+						timestamp:  time.Now(),
+						wasNewFile: false,
+					})
 				}
 			}
 
@@ -228,6 +259,37 @@ func (m *Mon) ignoreEvent(event fsnotify.Event) bool {
 	}
 
 	return false
+}
+
+func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		m.pendingDeletes.Range(func(key, value any) bool {
+			pd, ok := value.(pendingDelete)
+			if !ok {
+				m.pendingDeletes.Delete(key)
+				return true
+			}
+
+			if time.Since(pd.timestamp) > m.deleteTimeout {
+				m.pendingDeletes.Delete(key)
+				if pd.wasNewFile {
+					// New file deleted: decrement created count (net zero)
+					m.filesCreated.Add(-1)
+					slog.Debug("confirmed delete (new file, decrement created)", "name", key)
+				} else {
+					// Initial file deleted: increment deleted count
+					m.filesDeleted.Add(1)
+					slog.Debug("confirmed delete (initial file)", "name", key)
+				}
+				m.triggerDisplay(displayCh)
+			}
+
+			return true
+		})
+	}
 }
 
 func (m *Mon) addRecursiveWatchesForDir(watcher *fsnotify.Watcher, dir string) error {
