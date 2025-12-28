@@ -12,6 +12,8 @@ func allFlags() []cli.Flag {
 }
 
 const (
+	FlagDebug   = "debug"
+	EnvDebug    = "MON_DEBUG"
 	FlagNoColor = "no-color"
 	EnvNoColor  = "MON_NO_COLOR"
 )
@@ -20,6 +22,13 @@ func generalFlags() []cli.Flag {
 	category := "general"
 
 	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:     FlagDebug,
+			Aliases:  []string{"D"},
+			Category: category,
+			Sources:  cli.EnvVars(EnvDebug),
+			Value:    false,
+		},
 		&cli.BoolFlag{
 			Name:     FlagNoColor,
 			Aliases:  []string{"C"},
