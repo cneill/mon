@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -32,21 +31,42 @@ func GetHEADSHA(repo *git.Repository) (string, error) {
 	return headRef.Hash().String(), nil
 }
 
-func CommitsSince(repo *git.Repository, startHash string) ([]*object.Commit, error) {
-	results := []*object.Commit{}
+// CommitsSince returns all commits after (not including) the given hash.
+// It walks from HEAD backwards and stops when it reaches the given hash.
+func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, error) {
+	head, err := repo.Head()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get HEAD: %w", err)
+	}
+
+	// If HEAD is the same as sinceHash, no new commits
+	if head.Hash().String() == sinceHash {
+		return nil, nil
+	}
 
 	iter, err := repo.Log(&git.LogOptions{
-		From:  plumbing.NewHash(startHash),
+		From:  head.Hash(),
 		Order: git.LogOrderCommitterTime,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk git log: %w", err)
 	}
-
 	defer iter.Close()
 
-	for commit, err := iter.Next(); err != nil; commit, err = iter.Next() {
-		slog.Debug("processed commit", "commit_obj", commit)
+	var results []*object.Commit
+
+	for {
+		commit, err := iter.Next()
+		if err != nil {
+			break // End of iteration or error
+		}
+
+		// Stop when we reach the starting point
+		if commit.Hash.String() == sinceHash {
+			break
+		}
+
+		slog.Debug("processed commit", "hash", commit.Hash.String())
 		results = append(results, commit)
 	}
 
