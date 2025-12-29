@@ -76,7 +76,11 @@ func New(opts *Opts) (*Mon, error) {
 		return nil, fmt.Errorf("failed to get initial git HEAD SHA: %w", err)
 	}
 
-	gitLogPath := filepath.Join(opts.ProjectDir, ".git", "logs", "HEAD")
+	gitLogPath, err := filepath.Abs(filepath.Join(opts.ProjectDir, ".git", "logs", "HEAD"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get git log path: %w", err)
+	}
+
 	if _, err := os.Stat(gitLogPath); err != nil {
 		return nil, fmt.Errorf("git logs not found at %s", gitLogPath)
 	}
