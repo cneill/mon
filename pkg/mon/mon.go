@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/cneill/mon/pkg/git"
-	"github.com/fatih/color"
 	"github.com/fsnotify/fsnotify"
 	gogit "github.com/go-git/go-git/v5"
 )
@@ -90,26 +89,8 @@ func New(opts *Opts) (*Mon, error) {
 		deleteTimeout:     250 * time.Millisecond,
 	}
 
-	// Scan initial files (non-dirs, skip .git)
-	scanErr := filepath.WalkDir(opts.ProjectDir, func(path string, de os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if de.IsDir() || strings.Contains(path, ".git") {
-			if de.IsDir() && filepath.Base(path) == ".git" {
-				return filepath.SkipDir
-			}
-
-			return nil
-		}
-
-		mon.initialFiles.Store(path, struct{}{})
-
-		return nil
-	})
-	if scanErr != nil {
-		return nil, fmt.Errorf("failed to scan initial files: %w", scanErr)
+	if err := mon.populateInitialFiles(); err != nil {
+		return nil, fmt.Errorf("failed to populate initial project files: %w", err)
 	}
 
 	return mon, nil
@@ -144,7 +125,8 @@ func (m *Mon) Run(_ context.Context) error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	m.printFinalStats()
+	snapshot := m.getStatusSnapshot()
+	fmt.Println("\n" + snapshot.Final())
 
 	return nil
 }
@@ -154,96 +136,30 @@ type pendingDelete struct {
 	wasNewFile bool // true if file was in newFiles, false if in initialFiles
 }
 
-func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{}) {
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-
-			if m.ignoreEvent(event) {
-				continue
-			}
-
-			if event.Name == m.gitLogPath && (event.Op&(fsnotify.Write|fsnotify.Chmod) != 0) {
-				go m.processGitChange(displayCh)
-				continue
-			}
-
-			switch {
-			case event.Op&fsnotify.Create != 0:
-				// Check for matching pending delete
-				if pdI, pending := m.pendingDeletes.LoadAndDelete(event.Name); pending {
-					pd := pdI.(pendingDelete)
-					if pd.wasNewFile {
-						// Restore to newFiles, no count change needed
-						m.newFiles.Store(event.Name, struct{}{})
-					} else {
-						// Restore to initialFiles, no count change needed
-						m.initialFiles.Store(event.Name, struct{}{})
-					}
-
-					slog.Debug("ignored delete+create pair", "name", event.Name)
-
-					continue
-				}
-
-				// Only count if not already tracked in either map
-				_, inInitial := m.initialFiles.Load(event.Name)
-				_, inNew := m.newFiles.Load(event.Name)
-
-				if !inInitial && !inNew {
-					slog.Debug("added file", "name", event.Name)
-					m.filesCreated.Add(1)
-					m.newFiles.Store(event.Name, struct{}{})
-					m.triggerDisplay(displayCh)
-				}
-
-				if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
-					m.addRecursiveWatchesForDir(watcher, event.Name)
-				}
-
-			case event.Op&(fsnotify.Remove|fsnotify.Rename) != 0:
-				// Check if in newFiles first
-				if _, exists := m.newFiles.LoadAndDelete(event.Name); exists {
-					slog.Debug("pending delete (new file)", "name", event.Name)
-					m.pendingDeletes.Store(event.Name, pendingDelete{
-						timestamp:  time.Now(),
-						wasNewFile: true,
-					})
-
-					continue
-				}
-
-				// Check if in initialFiles
-				if _, exists := m.initialFiles.LoadAndDelete(event.Name); exists {
-					slog.Debug("pending delete (initial file)", "name", event.Name)
-					m.pendingDeletes.Store(event.Name, pendingDelete{
-						timestamp:  time.Now(),
-						wasNewFile: false,
-					})
-				}
-			}
-
-		case err := <-watcher.Errors:
-			slog.Error("watcher error", "error", err)
+func (m *Mon) populateInitialFiles() error {
+	// Scan initial files (non-dirs, skip .git)
+	scanErr := filepath.WalkDir(m.ProjectDir, func(path string, de os.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-	}
-}
 
-func (m *Mon) ignoreEvent(event fsnotify.Event) bool {
-	if strings.HasPrefix(event.Name, ".git") {
-		return true
+		if de.IsDir() || strings.Contains(path, ".git") {
+			if de.IsDir() && filepath.Base(path) == ".git" {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		m.initialFiles.Store(path, struct{}{})
+
+		return nil
+	})
+	if scanErr != nil {
+		return fmt.Errorf("failed to scan initial files: %w", scanErr)
 	}
 
-	// Ignore editor temp files: backups (~, .swp), swap (numeric names)
-	base := filepath.Base(event.Name)
-	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {
-		return true
-	}
-
-	return false
+	return nil
 }
 
 func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
@@ -346,13 +262,6 @@ func (m *Mon) processGitChange(displayCh chan<- struct{}) {
 	m.triggerDisplay(displayCh)
 }
 
-func (m *Mon) triggerDisplay(displayCh chan<- struct{}) {
-	select {
-	case displayCh <- struct{}{}:
-	default:
-	}
-}
-
 func (m *Mon) parseShortstat(stat string) (int64, int64) {
 	stat = strings.TrimSpace(stat)
 	if stat == "" {
@@ -378,94 +287,4 @@ func (m *Mon) parseShortstat(stat string) (int64, int64) {
 	deleted, _ := strconv.ParseInt(delStr, 10, 64)
 
 	return added, deleted
-}
-
-func isNumeric(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-func (m *Mon) displayLoop(displayCh <-chan struct{}) {
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-displayCh:
-		case <-ticker.C:
-		}
-
-		snapshot := m.getStatusSnapshot()
-
-		fmt.Printf("\r%s", snapshot.String())
-		os.Stdout.Sync()
-	}
-}
-
-func (m *Mon) getStatusSnapshot() *statusSnapshot {
-	return &statusSnapshot{
-		FilesCreated: m.filesCreated.Load(),
-		FilesDeleted: m.filesDeleted.Load(),
-		Commits:      m.commits.Load(),
-		LinesAdded:   m.linesAdded.Load(),
-		LinesDeleted: m.linesDeleted.Load(),
-	}
-}
-
-type statusSnapshot struct {
-	FilesCreated int64
-	FilesDeleted int64
-	Commits      int64
-	LinesAdded   int64
-	LinesDeleted int64
-}
-
-func (s *statusSnapshot) String() string {
-	builder := &strings.Builder{}
-	builder.WriteString("Files: ")
-	builder.WriteString(color.GreenString("+" + strconv.FormatInt(s.FilesCreated, 10)))
-	builder.WriteString(" / ")
-	builder.WriteString(color.RedString("-" + strconv.FormatInt(s.FilesDeleted, 10)))
-	builder.WriteString(" || Commits: ")
-	builder.WriteString(color.YellowString(strconv.FormatInt(s.Commits, 10)))
-	builder.WriteString(" || Lines: ")
-	builder.WriteString(color.GreenString("+" + strconv.FormatInt(s.LinesAdded, 10)))
-	builder.WriteString(" / ")
-	builder.WriteString(color.RedString("-" + strconv.FormatInt(s.LinesDeleted, 10)))
-
-	return builder.String()
-}
-
-func (s *statusSnapshot) Final() string {
-	builder := &strings.Builder{}
-
-	builder.WriteString("Session stats:\n")
-
-	builder.WriteString(" - Files: ")
-	builder.WriteString(color.GreenString(strconv.FormatInt(s.FilesCreated, 10) + " created"))
-	builder.WriteString(" / ")
-	builder.WriteString(color.RedString(strconv.FormatInt(s.FilesDeleted, 10) + " deleted"))
-	builder.WriteRune('\n')
-
-	builder.WriteString(" - Commits: " + color.YellowString("+"+strconv.FormatInt(s.Commits, 10)) + "\n")
-
-	builder.WriteString(" - Lines: ")
-	builder.WriteString(color.GreenString(strconv.FormatInt(s.LinesAdded, 10) + " added"))
-	builder.WriteString(" / ")
-	builder.WriteString(color.RedString(strconv.FormatInt(s.LinesDeleted, 10) + " deleted"))
-	builder.WriteRune('\n')
-
-	return builder.String()
-}
-
-func (m *Mon) printFinalStats() {
-	snapshot := m.getStatusSnapshot()
-	fmt.Println("\n" + snapshot.Final())
 }
