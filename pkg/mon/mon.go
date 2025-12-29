@@ -54,6 +54,7 @@ type Mon struct {
 	commits           atomic.Int64
 	linesAdded        atomic.Int64
 	linesDeleted      atomic.Int64
+	unstagedChanges   atomic.Int64
 	gitLogPath        string
 	initialFiles      sync.Map // Tracks initial files on start (read-only after init)
 	newFiles          sync.Map // Tracks files created after initialization
@@ -106,6 +107,9 @@ func New(opts *Opts) (*Mon, error) {
 	if err := mon.setupWatcher(); err != nil {
 		return nil, err
 	}
+
+	// Get initial unstaged changes count
+	mon.updateUnstagedChanges()
 
 	return mon, nil
 }
@@ -274,10 +278,18 @@ func (m *Mon) processGitChange() {
 	m.linesAdded.Store(adds)
 	m.linesDeleted.Store(deletes)
 
-	if err := git.DirtyChanges(m.repo); err != nil {
-		slog.Error("failed to check dirty changes", "error", err)
-	}
+	m.updateUnstagedChanges()
 
 	m.lastProcessedHash = newHash
 	m.triggerDisplay()
+}
+
+func (m *Mon) updateUnstagedChanges() {
+	unstagedCount, err := git.UnstagedChangeCount(m.repo)
+	if err != nil {
+		slog.Error("failed to check unstaged changes", "error", err)
+		return
+	}
+
+	m.unstagedChanges.Store(unstagedCount)
 }

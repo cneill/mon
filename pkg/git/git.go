@@ -112,20 +112,28 @@ func PatchAddsDeletes(patch *object.Patch) (added int64, deleted int64) { //noli
 	return added, deleted
 }
 
-func DirtyChanges(repo *git.Repository) error {
+// UnstagedChangeCount returns the count of tracked files with unstaged changes.
+// It counts files with Modified, Deleted, or Renamed status in the worktree.
+// Untracked files are ignored.
+func UnstagedChangeCount(repo *git.Repository) (int64, error) {
 	wt, err := repo.Worktree()
 	if err != nil {
-		return fmt.Errorf("failed to get repo worktree: %w", err)
+		return 0, fmt.Errorf("failed to get repo worktree: %w", err)
 	}
 
 	status, err := wt.Status()
 	if err != nil {
-		return fmt.Errorf("failed to get the status of the git worktree: %w", err)
+		return 0, fmt.Errorf("failed to get the status of the git worktree: %w", err)
 	}
 
+	var count int64
 	for file, fileStatus := range status {
-		slog.Debug("tracking status", "file", file, "worktree_status", string(fileStatus.Worktree), "staging_status", string(fileStatus.Staging))
+		switch fileStatus.Worktree {
+		case git.Modified, git.Deleted, git.Renamed:
+			slog.Debug("unstaged change", "file", file, "status", string(fileStatus.Worktree))
+			count++
+		}
 	}
 
-	return nil
+	return count, nil
 }

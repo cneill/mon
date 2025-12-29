@@ -36,20 +36,22 @@ func (m *Mon) triggerDisplay() {
 
 func (m *Mon) getStatusSnapshot() *statusSnapshot {
 	return &statusSnapshot{
-		FilesCreated: m.filesCreated.Load(),
-		FilesDeleted: m.filesDeleted.Load(),
-		Commits:      m.commits.Load(),
-		LinesAdded:   m.linesAdded.Load(),
-		LinesDeleted: m.linesDeleted.Load(),
+		FilesCreated:    m.filesCreated.Load(),
+		FilesDeleted:    m.filesDeleted.Load(),
+		Commits:         m.commits.Load(),
+		LinesAdded:      m.linesAdded.Load(),
+		LinesDeleted:    m.linesDeleted.Load(),
+		UnstagedChanges: m.unstagedChanges.Load(),
 	}
 }
 
 type statusSnapshot struct {
-	FilesCreated int64
-	FilesDeleted int64
-	Commits      int64
-	LinesAdded   int64
-	LinesDeleted int64
+	FilesCreated    int64
+	FilesDeleted    int64
+	Commits         int64
+	LinesAdded      int64
+	LinesDeleted    int64
+	UnstagedChanges int64
 }
 
 func (s *statusSnapshot) String() string {
@@ -64,6 +66,11 @@ func (s *statusSnapshot) String() string {
 	builder.WriteString(color.GreenString("+" + strconv.FormatInt(s.LinesAdded, 10)))
 	builder.WriteString(" / ")
 	builder.WriteString(color.RedString("-" + strconv.FormatInt(s.LinesDeleted, 10)))
+
+	if s.UnstagedChanges > 0 {
+		builder.WriteString(" || Unstaged file changes: ")
+		builder.WriteString(color.CyanString(strconv.FormatInt(s.UnstagedChanges, 10)))
+	}
 
 	return builder.String()
 }
@@ -86,6 +93,12 @@ func (s *statusSnapshot) Final() string {
 	builder.WriteString(" / ")
 	builder.WriteString(color.RedString(strconv.FormatInt(s.LinesDeleted, 10) + " deleted"))
 	builder.WriteRune('\n')
+
+	if s.UnstagedChanges > 0 {
+		builder.WriteString(" - Unstaged file changes: ")
+		builder.WriteString(color.CyanString(strconv.FormatInt(s.UnstagedChanges, 10)))
+		builder.WriteRune('\n')
+	}
 
 	return builder.String()
 }
