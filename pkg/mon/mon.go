@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -259,49 +257,53 @@ func (m *Mon) processGitChange() {
 
 	m.commits.Store(int64(len(commits)))
 
+	// diffCmd := exec.Command("git", "-C", m.ProjectDir, "diff", "--shortstat", m.initialHash+".."+newHash)
+	//
+	// diffBytes, err := diffCmd.Output()
+	// if err != nil {
+	// 	return
+	// }
+	//
+	// added, deleted := m.parseShortstat(string(diffBytes))
+	// m.linesAdded.Store(added)
+	// m.linesDeleted.Store(deleted)
+
+	if err := git.DiffSince(m.repo, m.initialHash); err != nil {
+		slog.Error("failed to git diff", "error", err)
+	}
+
 	newHash, err := git.GetHEADSHA(m.repo)
 	if err != nil {
 		slog.Error("failed to get new git SHA", "error", err)
 	}
 
-	diffCmd := exec.Command("git", "-C", m.ProjectDir, "diff", "--shortstat", m.initialHash+".."+newHash)
-
-	diffBytes, err := diffCmd.Output()
-	if err != nil {
-		return
-	}
-
-	added, deleted := m.parseShortstat(string(diffBytes))
-	m.linesAdded.Store(added)
-	m.linesDeleted.Store(deleted)
-
 	m.lastProcessedHash = newHash
 	m.triggerDisplay()
 }
 
-func (m *Mon) parseShortstat(stat string) (int64, int64) {
-	stat = strings.TrimSpace(stat)
-	if stat == "" {
-		return 0, 0
-	}
-
-	insertionsIdx := strings.Index(stat, "insertions(+)")
-	if insertionsIdx == -1 {
-		return 0, 0
-	}
-
-	addStr := stat[strings.LastIndex(stat[:insertionsIdx], " ")+1 : insertionsIdx]
-	addStr = strings.TrimSpace(addStr)
-	added, _ := strconv.ParseInt(addStr, 10, 64)
-
-	deletionsIdx := strings.Index(stat, "deletions(-)")
-	if deletionsIdx == -1 {
-		return added, 0
-	}
-
-	delStr := stat[insertionsIdx+len("insertions(+)") : deletionsIdx]
-	delStr = strings.TrimSpace(delStr)
-	deleted, _ := strconv.ParseInt(delStr, 10, 64)
-
-	return added, deleted
-}
+// func (m *Mon) parseShortstat(stat string) (int64, int64) {
+// 	stat = strings.TrimSpace(stat)
+// 	if stat == "" {
+// 		return 0, 0
+// 	}
+//
+// 	insertionsIdx := strings.Index(stat, "insertions(+)")
+// 	if insertionsIdx == -1 {
+// 		return 0, 0
+// 	}
+//
+// 	addStr := stat[strings.LastIndex(stat[:insertionsIdx], " ")+1 : insertionsIdx]
+// 	addStr = strings.TrimSpace(addStr)
+// 	added, _ := strconv.ParseInt(addStr, 10, 64)
+//
+// 	deletionsIdx := strings.Index(stat, "deletions(-)")
+// 	if deletionsIdx == -1 {
+// 		return added, 0
+// 	}
+//
+// 	delStr := stat[insertionsIdx+len("insertions(+)") : deletionsIdx]
+// 	delStr = strings.TrimSpace(delStr)
+// 	deleted, _ := strconv.ParseInt(delStr, 10, 64)
+//
+// 	return added, deleted
+// }

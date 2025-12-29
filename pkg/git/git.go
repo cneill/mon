@@ -3,9 +3,9 @@ package git
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -36,10 +36,10 @@ func GetHEADSHA(repo *git.Repository) (string, error) {
 func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, error) {
 	head, err := repo.Head()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get HEAD: %w", err)
+		return nil, fmt.Errorf("failed to get HEAD reference: %w", err)
 	}
 
-	slog.Debug("checking from HEAD hash", "hash", head.Hash().String())
+	// slog.Debug("checking from HEAD hash", "hash", head.Hash().String())
 
 	// If HEAD is the same as sinceHash, no new commits
 	if head.Hash().String() == sinceHash {
@@ -63,7 +63,7 @@ func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, err
 			break // End of iteration or error
 		}
 
-		slog.Debug("checked commit", "hash", commit.Hash.String())
+		// slog.Debug("checked commit", "hash", commit.Hash.String())
 
 		// Stop when we reach the starting point
 		if commit.Hash.String() == sinceHash {
@@ -74,4 +74,30 @@ func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, err
 	}
 
 	return results, nil
+}
+
+func DiffSince(repo *git.Repository, sinceHash string) error {
+	sinceCommit, err := repo.CommitObject(plumbing.NewHash(sinceHash))
+	if err != nil {
+		return fmt.Errorf("failed to get commit for commit hash %q: %w", sinceHash, err)
+	}
+
+	headRef, err := repo.Head()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD reference: %w", err)
+	}
+
+	headCommit, err := repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD commit: %w", err)
+	}
+
+	patch, err := sinceCommit.Patch(headCommit)
+	if err != nil {
+		return fmt.Errorf("failed to get patch between %s and %s: %w", sinceHash, headRef.Hash().String(), err)
+	}
+
+	fmt.Println(patch.String())
+
+	return nil
 }
