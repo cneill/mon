@@ -246,6 +246,8 @@ func (m *Mon) processGitChange() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
+	slog.Debug("Processing git change")
+
 	commits, err := git.CommitsSince(m.repo, m.initialHash)
 	if err != nil {
 		slog.Error("failed to list commits since initialization", "error", err)
