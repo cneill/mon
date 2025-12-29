@@ -18,6 +18,7 @@ const (
 	EventTypeCreate  EventType = "create"
 	EventTypeRemove  EventType = "remove"
 	EventTypeRename  EventType = "rename"
+	EventTypeWrite   EventType = "write"
 )
 
 func getEventType(event fsnotify.Event) EventType {
@@ -28,6 +29,8 @@ func getEventType(event fsnotify.Event) EventType {
 		return EventTypeRemove
 	case event.Op&fsnotify.Rename != 0:
 		return EventTypeRename
+	case event.Op&fsnotify.Write != 0:
+		return EventTypeWrite
 	}
 
 	return EventTypeUnknown
@@ -79,6 +82,15 @@ func (m *Mon) handleEvents() {
 			case EventTypeRemove, EventTypeRename:
 				if err := m.handleRemoveOrRename(event); err != nil {
 					slog.Error("failed to handle "+string(eventType)+" event: %w", "error", err)
+				}
+
+			case EventTypeWrite:
+				time.Sleep(time.Millisecond * 250) // allow write+delete pairs to settle before checking
+
+				if m.writeLimiter.Allow() {
+					m.writeLimiter.Reserve()
+
+					go m.processGitChange()
 				}
 			}
 

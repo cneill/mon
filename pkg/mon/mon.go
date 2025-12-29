@@ -16,6 +16,7 @@ import (
 	"github.com/cneill/mon/pkg/git"
 	"github.com/fsnotify/fsnotify"
 	gogit "github.com/go-git/go-git/v5"
+	"golang.org/x/time/rate"
 )
 
 type Opts struct {
@@ -39,8 +40,9 @@ func (o *Opts) OK() error {
 type Mon struct {
 	*Opts
 
-	repo    *gogit.Repository
-	watcher *fsnotify.Watcher
+	repo         *gogit.Repository
+	watcher      *fsnotify.Watcher
+	writeLimiter *rate.Limiter
 
 	displayChan chan struct{}
 
@@ -86,7 +88,8 @@ func New(opts *Opts) (*Mon, error) {
 	mon := &Mon{
 		Opts: opts,
 
-		repo: repo,
+		repo:         repo,
+		writeLimiter: rate.NewLimiter(3, 1),
 
 		displayChan: make(chan struct{}),
 
