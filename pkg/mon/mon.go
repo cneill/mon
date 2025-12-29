@@ -18,6 +18,7 @@ import (
 	"github.com/cneill/mon/pkg/git"
 	"github.com/fatih/color"
 	"github.com/fsnotify/fsnotify"
+	gogit "github.com/go-git/go-git/v5"
 )
 
 type Opts struct {
@@ -35,15 +36,13 @@ func (o *Opts) OK() error {
 		return fmt.Errorf("failed to stat project dir: %w", err)
 	}
 
-	if err := git.InGitDir(context.TODO(), o.ProjectDir); err != nil {
-		return err //nolint:wrapcheck
-	}
-
 	return nil
 }
 
 type Mon struct {
 	*Opts
+
+	repo *gogit.Repository
 
 	mutex             sync.Mutex
 	initialHash       string
@@ -65,7 +64,12 @@ func New(opts *Opts) (*Mon, error) {
 		return nil, fmt.Errorf("failed to configure mon: %w", err)
 	}
 
-	initialHash, err := git.GetHEADSha(context.TODO(), opts.ProjectDir)
+	repo, err := git.OpenGitRepo(opts.ProjectDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open git repo in project dir %q: %w", opts.ProjectDir, err)
+	}
+
+	initialHash, err := git.GetHEADSHA(repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get initial git HEAD SHA: %w", err)
 	}
@@ -76,7 +80,10 @@ func New(opts *Opts) (*Mon, error) {
 	}
 
 	mon := &Mon{
-		Opts:              opts,
+		Opts: opts,
+
+		repo: repo,
+
 		initialHash:       initialHash,
 		lastProcessedHash: initialHash,
 		gitLogPath:        gitLogPath,
@@ -303,7 +310,7 @@ func (m *Mon) processGitChange(displayCh chan<- struct{}) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	newHash, err := git.GetHEADSha(context.TODO(), m.ProjectDir)
+	newHash, err := git.GetHEADSHA(m.repo)
 	if err != nil {
 		slog.Error("failed to get new git SHA", "error", err)
 	}

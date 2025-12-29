@@ -1,30 +1,30 @@
 package git
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"os/exec"
-	"strings"
+
+	"github.com/go-git/go-git/v5"
 )
 
-func InGitDir(ctx context.Context, path string) error {
-	cmd := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--is-inside-work-tree")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s is not a git repository", path)
+var ErrNotGitRepo = errors.New("not a git repository")
+
+func OpenGitRepo(path string) (*git.Repository, error) {
+	repo, err := git.PlainOpen(path)
+	if errors.Is(err, git.ErrRepositoryNotExists) {
+		return nil, ErrNotGitRepo
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to open git repo: %w", err)
 	}
 
-	return nil
+	return repo, nil
 }
 
-func GetHEADSha(ctx context.Context, path string) (string, error) {
-	hashCmd := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "HEAD")
-
-	hashBytes, err := hashCmd.Output()
+func GetHEADSHA(repo *git.Repository) (string, error) {
+	headRef, err := repo.Head()
 	if err != nil {
-		return "", fmt.Errorf("failed to get initial HEAD: %w", err)
+		return "", fmt.Errorf("failed to get HEAD commit: %w", err)
 	}
 
-	initialHash := strings.TrimSpace(string(hashBytes))
-
-	return initialHash, nil
+	return headRef.Hash().String(), nil
 }
