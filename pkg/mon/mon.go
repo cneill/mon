@@ -251,21 +251,12 @@ func (m *Mon) processGitChange() {
 		slog.Error("failed to get new git SHA", "error", err)
 	}
 
-	countCmd := exec.Command("git", "-C", m.ProjectDir, "rev-list", "--count", m.initialHash+".."+newHash)
-
-	countBytes, err := countCmd.Output()
+	commits, err := git.CommitsSince(m.repo, m.initialHash)
 	if err != nil {
-		return
+		slog.Error("failed to list commits since initialization", "error", err)
 	}
 
-	commitsTotalStr := strings.TrimSpace(string(countBytes))
-
-	commitsTotal, err := strconv.ParseInt(commitsTotalStr, 10, 64)
-	if err != nil {
-		return
-	}
-
-	m.commits.Store(commitsTotal)
+	m.commits.Store(int64(len(commits)))
 
 	diffCmd := exec.Command("git", "-C", m.ProjectDir, "diff", "--shortstat", m.initialHash+".."+newHash)
 
