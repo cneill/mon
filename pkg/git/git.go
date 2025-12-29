@@ -3,6 +3,7 @@ package git
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -123,7 +124,7 @@ func DirtyChanges(repo *git.Repository) error {
 	}
 
 	for file, fileStatus := range status {
-		fmt.Printf("%s: wt=%s, staging=%s", file, fileStatus.Worktree, fileStatus.Staging)
+		slog.Debug("tracking status", "file", file, "worktree_status", string(fileStatus.Worktree), "staging_status", string(fileStatus.Staging))
 	}
 
 	return nil
