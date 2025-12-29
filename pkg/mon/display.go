@@ -10,6 +10,8 @@ import (
 	"github.com/fatih/color"
 )
 
+const clearLine = "\r\033[K" // Carriage return + clear to end of line
+
 func (m *Mon) displayLoop() {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -22,7 +24,7 @@ func (m *Mon) displayLoop() {
 
 		snapshot := m.getStatusSnapshot()
 
-		fmt.Printf("\r%s", snapshot.String())
+		fmt.Printf("%s%s", clearLine, snapshot.String())
 		os.Stdout.Sync()
 	}
 }
