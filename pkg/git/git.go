@@ -3,6 +3,7 @@ package git
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -45,6 +46,7 @@ func CommitsSince(repo *git.Repository, startHash string) ([]*object.Commit, err
 	defer iter.Close()
 
 	for commit, err := iter.Next(); err != nil; commit, err = iter.Next() {
+		slog.Debug("processed commit", "commit_obj", commit)
 		results = append(results, commit)
 	}
 
