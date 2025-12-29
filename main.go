@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/urfave/cli/v3"
@@ -42,10 +43,17 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		defer file.Close()
 	}
 
+	rawProjectDir := cmd.String(FlagProjectDir)
+
+	projectDir, err := filepath.Abs(filepath.Clean(rawProjectDir))
+	if err != nil {
+		return fmt.Errorf("invalid project path %q: %w", rawProjectDir, err)
+	}
+
 	opts := &mon.Opts{
 		GitWatch:   cmd.Bool(FlagGitWatch),
 		NoColor:    cmd.Bool(FlagNoColor),
-		ProjectDir: cmd.String(FlagProjectDir),
+		ProjectDir: projectDir,
 	}
 
 	mon, err := mon.New(opts)
