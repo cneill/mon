@@ -82,8 +82,10 @@ func (m *Mon) handleEvents() {
 				}
 			}
 
-		case err := <-m.watcher.Errors:
-			slog.Error("watcher error", "error", err)
+		case err, ok := <-m.watcher.Errors:
+			if ok {
+				slog.Error("watcher error", "error", err)
+			}
 		}
 	}
 }
