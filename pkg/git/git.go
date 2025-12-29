@@ -110,3 +110,21 @@ func PatchAddsDeletes(patch *object.Patch) (added int64, deleted int64) { //noli
 
 	return added, deleted
 }
+
+func DirtyChanges(repo *git.Repository) error {
+	wt, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get repo worktree: %w", err)
+	}
+
+	status, err := wt.Status()
+	if err != nil {
+		return fmt.Errorf("failed to get the status of the git worktree: %w", err)
+	}
+
+	for file, fileStatus := range status {
+		fmt.Printf("%s: wt=%s, staging=%s", file, fileStatus.Worktree, fileStatus.Staging)
+	}
+
+	return nil
+}

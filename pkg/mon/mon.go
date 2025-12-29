@@ -271,6 +271,10 @@ func (m *Mon) processGitChange() {
 	m.linesAdded.Store(adds)
 	m.linesDeleted.Store(deletes)
 
+	if err := git.DirtyChanges(m.repo); err != nil {
+		slog.Error("failed to check dirty changes", "error", err)
+	}
+
 	m.lastProcessedHash = newHash
 	m.triggerDisplay()
 }
