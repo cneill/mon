@@ -10,13 +10,13 @@ import (
 	"github.com/fatih/color"
 )
 
-func (m *Mon) displayLoop(displayCh <-chan struct{}) {
+func (m *Mon) displayLoop() {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-displayCh:
+		case <-m.displayChan:
 		case <-ticker.C:
 		}
 
@@ -27,9 +27,9 @@ func (m *Mon) displayLoop(displayCh <-chan struct{}) {
 	}
 }
 
-func (m *Mon) triggerDisplay(displayCh chan<- struct{}) {
+func (m *Mon) triggerDisplay() {
 	select {
-	case displayCh <- struct{}{}:
+	case m.displayChan <- struct{}{}:
 	default:
 	}
 }

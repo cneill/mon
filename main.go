@@ -53,6 +53,8 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("failed to set up mon: %w", err)
 	}
 
+	defer mon.Teardown()
+
 	if err := mon.Run(ctx); err != nil {
 		return fmt.Errorf("mon run error: %w", err)
 	}

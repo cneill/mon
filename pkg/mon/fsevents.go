@@ -1,6 +1,7 @@
 package mon
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -46,10 +47,14 @@ func ignoreEvent(event fsnotify.Event) bool {
 	return false
 }
 
-func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{}) {
+func (m *Mon) handleEvents() {
+	if m.watcher == nil {
+		panic(fmt.Errorf("watcher wasn't set up first to monitor events"))
+	}
+
 	for {
 		select {
-		case event, ok := <-watcher.Events:
+		case event, ok := <-m.watcher.Events:
 			if !ok {
 				return
 			}
@@ -61,7 +66,7 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 			eventType := getEventType(event)
 
 			if event.Name == m.gitLogPath && (event.Op&(fsnotify.Write|fsnotify.Chmod) != 0) {
-				go m.processGitChange(displayCh)
+				go m.processGitChange()
 				continue
 			}
 
@@ -77,7 +82,7 @@ func (m *Mon) handleEvents(watcher *fsnotify.Watcher, displayCh chan<- struct{})
 				}
 			}
 
-		case err := <-watcher.Errors:
+		case err := <-m.watcher.Errors:
 			slog.Error("watcher error", "error", err)
 		}
 	}
@@ -122,11 +127,11 @@ func (m *Mon) handleCreate(event fsnotify.Event) error {
 		slog.Debug("added file", "name", event.Name)
 		m.filesCreated.Add(1)
 		m.newFiles.Store(event.Name, struct{}{})
-		m.triggerDisplay(displayCh)
+		m.triggerDisplay()
 	}
 
 	if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
-		m.addRecursiveWatchesForDir(watcher, event.Name)
+		m.addRecursiveWatchesForDir(event.Name)
 	}
 
 	return nil

@@ -41,7 +41,10 @@ func (o *Opts) OK() error {
 type Mon struct {
 	*Opts
 
-	repo *gogit.Repository
+	repo    *gogit.Repository
+	watcher *fsnotify.Watcher
+
+	displayChan chan struct{}
 
 	mutex             sync.Mutex
 	initialHash       string
@@ -83,6 +86,8 @@ func New(opts *Opts) (*Mon, error) {
 
 		repo: repo,
 
+		displayChan: make(chan struct{}),
+
 		initialHash:       initialHash,
 		lastProcessedHash: initialHash,
 		gitLogPath:        gitLogPath,
@@ -93,33 +98,21 @@ func New(opts *Opts) (*Mon, error) {
 		return nil, fmt.Errorf("failed to populate initial project files: %w", err)
 	}
 
+	if err := mon.setupWatcher(); err != nil {
+		return nil, err
+	}
+
 	return mon, nil
 }
 
 func (m *Mon) Run(_ context.Context) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return fmt.Errorf("failed to create watcher: %w", err)
-	}
-	defer watcher.Close()
+	go m.handleEvents()
 
-	if err := m.addRecursiveWatchesForDir(watcher, m.ProjectDir); err != nil {
-		return err
-	}
+	go m.processPendingDeletes()
 
-	if err := watcher.Add(m.gitLogPath); err != nil {
-		return fmt.Errorf("failed to watch %s: %w", m.gitLogPath, err)
-	}
+	go m.displayLoop()
 
-	displayCh := make(chan struct{}, 10)
-
-	go m.handleEvents(watcher, displayCh)
-
-	go m.processPendingDeletes(displayCh)
-
-	go m.displayLoop(displayCh)
-
-	m.triggerDisplay(displayCh)
+	m.triggerDisplay()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -129,6 +122,14 @@ func (m *Mon) Run(_ context.Context) error {
 	fmt.Println("\n" + snapshot.Final())
 
 	return nil
+}
+
+func (m *Mon) Teardown() {
+	if m.watcher != nil {
+		if err := m.watcher.Close(); err != nil {
+			slog.Error("failed to close watcher", "error", err)
+		}
+	}
 }
 
 type pendingDelete struct {
@@ -162,7 +163,26 @@ func (m *Mon) populateInitialFiles() error {
 	return nil
 }
 
-func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
+func (m *Mon) setupWatcher() error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create watcher: %w", err)
+	}
+
+	m.watcher = watcher
+
+	if err := m.addRecursiveWatchesForDir(m.ProjectDir); err != nil {
+		return err
+	}
+
+	if err := watcher.Add(m.gitLogPath); err != nil {
+		return fmt.Errorf("failed to watch %s: %w", m.gitLogPath, err)
+	}
+
+	return nil
+}
+
+func (m *Mon) processPendingDeletes() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -187,7 +207,7 @@ func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
 					slog.Debug("confirmed delete (initial file)", "name", key)
 				}
 
-				m.triggerDisplay(displayCh)
+				m.triggerDisplay()
 			}
 
 			return true
@@ -195,7 +215,7 @@ func (m *Mon) processPendingDeletes(displayCh chan<- struct{}) {
 	}
 }
 
-func (m *Mon) addRecursiveWatchesForDir(watcher *fsnotify.Watcher, dir string) error {
+func (m *Mon) addRecursiveWatchesForDir(dir string) error {
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -209,7 +229,7 @@ func (m *Mon) addRecursiveWatchesForDir(watcher *fsnotify.Watcher, dir string) e
 			return filepath.SkipDir
 		}
 
-		if err := watcher.Add(path); err != nil {
+		if err := m.watcher.Add(path); err != nil {
 			return fmt.Errorf("failed to add watcher for directory %q: %w", path, err)
 		}
 
@@ -222,7 +242,7 @@ func (m *Mon) addRecursiveWatchesForDir(watcher *fsnotify.Watcher, dir string) e
 	return nil
 }
 
-func (m *Mon) processGitChange(displayCh chan<- struct{}) {
+func (m *Mon) processGitChange() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -259,7 +279,7 @@ func (m *Mon) processGitChange(displayCh chan<- struct{}) {
 	m.linesDeleted.Store(deleted)
 
 	m.lastProcessedHash = newHash
-	m.triggerDisplay(displayCh)
+	m.triggerDisplay()
 }
 
 func (m *Mon) parseShortstat(stat string) (int64, int64) {
