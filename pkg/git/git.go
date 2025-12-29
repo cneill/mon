@@ -63,12 +63,13 @@ func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, err
 			break // End of iteration or error
 		}
 
+		slog.Debug("checked commit", "hash", commit.Hash.String())
+
 		// Stop when we reach the starting point
 		if commit.Hash.String() == sinceHash {
 			break
 		}
 
-		slog.Debug("processed commit", "hash", commit.Hash.String())
 		results = append(results, commit)
 	}
 

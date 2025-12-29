@@ -246,17 +246,17 @@ func (m *Mon) processGitChange() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	newHash, err := git.GetHEADSHA(m.repo)
-	if err != nil {
-		slog.Error("failed to get new git SHA", "error", err)
-	}
-
 	commits, err := git.CommitsSince(m.repo, m.initialHash)
 	if err != nil {
 		slog.Error("failed to list commits since initialization", "error", err)
 	}
 
 	m.commits.Store(int64(len(commits)))
+
+	newHash, err := git.GetHEADSHA(m.repo)
+	if err != nil {
+		slog.Error("failed to get new git SHA", "error", err)
+	}
 
 	diffCmd := exec.Command("git", "-C", m.ProjectDir, "diff", "--shortstat", m.initialHash+".."+newHash)
 
