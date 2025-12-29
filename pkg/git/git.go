@@ -76,28 +76,37 @@ func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, err
 	return results, nil
 }
 
-func DiffSince(repo *git.Repository, sinceHash string) error {
+func PatchSince(repo *git.Repository, sinceHash string) (*object.Patch, error) {
 	sinceCommit, err := repo.CommitObject(plumbing.NewHash(sinceHash))
 	if err != nil {
-		return fmt.Errorf("failed to get commit for commit hash %q: %w", sinceHash, err)
+		return nil, fmt.Errorf("failed to get commit for commit hash %q: %w", sinceHash, err)
 	}
 
 	headRef, err := repo.Head()
 	if err != nil {
-		return fmt.Errorf("failed to get HEAD reference: %w", err)
+		return nil, fmt.Errorf("failed to get HEAD reference: %w", err)
 	}
 
 	headCommit, err := repo.CommitObject(headRef.Hash())
 	if err != nil {
-		return fmt.Errorf("failed to get HEAD commit: %w", err)
+		return nil, fmt.Errorf("failed to get HEAD commit: %w", err)
 	}
 
 	patch, err := sinceCommit.Patch(headCommit)
 	if err != nil {
-		return fmt.Errorf("failed to get patch between %s and %s: %w", sinceHash, headRef.Hash().String(), err)
+		return nil, fmt.Errorf("failed to get patch between %s and %s: %w", sinceHash, headRef.Hash().String(), err)
 	}
 
-	fmt.Println(patch.String())
+	return patch, nil
+}
 
-	return nil
+func PatchAddsDeletes(patch *object.Patch) (added int64, deleted int64) { //nolint:nonamedreturns
+	stats := patch.Stats()
+
+	for _, fileStat := range stats {
+		added += int64(fileStat.Addition)
+		deleted += int64(fileStat.Deletion)
+	}
+
+	return added, deleted
 }

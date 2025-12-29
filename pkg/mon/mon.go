@@ -268,14 +268,23 @@ func (m *Mon) processGitChange() {
 	// m.linesAdded.Store(added)
 	// m.linesDeleted.Store(deleted)
 
-	if err := git.DiffSince(m.repo, m.initialHash); err != nil {
-		slog.Error("failed to git diff", "error", err)
-	}
-
 	newHash, err := git.GetHEADSHA(m.repo)
 	if err != nil {
 		slog.Error("failed to get new git SHA", "error", err)
 	}
+
+	patch, err := git.PatchSince(m.repo, m.initialHash)
+	if err != nil {
+		slog.Error("failed to generate patch", "initial_hash", m.initialHash, "head_hash", newHash)
+	}
+
+	adds, deletes := git.PatchAddsDeletes(patch)
+	m.linesAdded.Store(adds)
+	m.linesDeleted.Store(deletes)
+
+	// if err := git.DiffSince(); err != nil {
+	// 	slog.Error("failed to git diff", "error", err)
+	// }
 
 	m.lastProcessedHash = newHash
 	m.triggerDisplay()
