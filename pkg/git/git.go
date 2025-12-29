@@ -39,6 +39,8 @@ func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, err
 		return nil, fmt.Errorf("failed to get HEAD: %w", err)
 	}
 
+	slog.Debug("checking from HEAD hash", "hash", head.Hash().String())
+
 	// If HEAD is the same as sinceHash, no new commits
 	if head.Hash().String() == sinceHash {
 		return nil, nil
