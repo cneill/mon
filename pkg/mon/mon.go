@@ -128,7 +128,7 @@ func (m *Mon) Run(_ context.Context) error {
 	<-sigChan
 
 	snapshot := m.getStatusSnapshot(true)
-	fmt.Println("\n" + snapshot.Final())
+	fmt.Println(clearLine + snapshot.Final())
 
 	return nil
 }
