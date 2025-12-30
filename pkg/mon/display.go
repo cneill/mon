@@ -48,37 +48,43 @@ func (m *Mon) triggerDisplay() {
 	}
 }
 
-func (m *Mon) getStatusSnapshot(includePatch bool) *statusSnapshot {
-	var (
-		patch    *object.Patch
-		patchErr error
-	)
-
-	if includePatch {
-		patch, patchErr = git.PatchSince(m.repo, m.initialHash)
-		if patchErr != nil {
-			slog.Error("failed to generate patch", "initial_hash", m.initialHash, "error", patchErr)
-		}
-	}
-
-	return &statusSnapshot{
+func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
+	snapshot := &statusSnapshot{
 		FilesCreated:    strconv.FormatInt(m.filesCreated.Load(), 10),
 		FilesDeleted:    strconv.FormatInt(m.filesDeleted.Load(), 10),
-		Commits:         strconv.FormatInt(m.commits.Load(), 10),
+		NumCommits:      strconv.FormatInt(m.commits.Load(), 10),
 		LinesAdded:      strconv.FormatInt(m.linesAdded.Load(), 10),
 		LinesDeleted:    strconv.FormatInt(m.linesDeleted.Load(), 10),
 		UnstagedChanges: strconv.FormatInt(m.unstagedChanges.Load(), 10),
-		Patch:           patch,
 	}
+
+	if final {
+		commits, err := git.CommitsSince(m.repo, m.initialHash)
+		if err != nil {
+			slog.Error("failed to collect commits since initial hash", "initial_hash", m.initialHash, "error", err)
+		}
+
+		snapshot.Commits = commits
+
+		patch, err := git.PatchSince(m.repo, m.initialHash)
+		if err != nil {
+			slog.Error("failed to generate patch since initial hash", "initial_hash", m.initialHash, "error", err)
+		}
+
+		snapshot.Patch = patch
+	}
+
+	return snapshot
 }
 
 type statusSnapshot struct {
 	FilesCreated    string
 	FilesDeleted    string
-	Commits         string
+	NumCommits      string
 	LinesAdded      string
 	LinesDeleted    string
 	UnstagedChanges string
+	Commits         []*object.Commit
 	Patch           *object.Patch
 }
 
@@ -95,7 +101,7 @@ func (s *statusSnapshot) String() string {
 	builder.WriteString(removedColor.Sprint("-" + s.LinesDeleted))
 	builder.WriteString(separator)
 	builder.WriteString(labelColor.Sprint("Commits: "))
-	builder.WriteString(color.YellowString(s.Commits))
+	builder.WriteString(color.YellowString(s.NumCommits))
 
 	if s.UnstagedChanges != "0" {
 		builder.WriteString(separator)
@@ -117,7 +123,7 @@ func (s *statusSnapshot) Final() string {
 	builder.WriteString(removedColor.Sprint(s.FilesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
-	builder.WriteString(" - Commits: " + color.YellowString("+"+s.Commits) + "\n")
+	builder.WriteString(" - Commits: " + color.YellowString("+"+s.NumCommits) + "\n")
 
 	builder.WriteString(" - Lines: ")
 	builder.WriteString(addedColor.Sprint(s.LinesAdded + " added"))
@@ -131,7 +137,8 @@ func (s *statusSnapshot) Final() string {
 		builder.WriteRune('\n')
 	}
 
-	builder.WriteString("\n" + s.patchString() + "\n")
+	builder.WriteString(s.patchString())
+	builder.WriteString(s.commitsString())
 
 	return builder.String()
 }
@@ -141,5 +148,29 @@ func (s *statusSnapshot) patchString() string {
 		return ""
 	}
 
-	return s.Patch.Stats().String()
+	return "\nPatch stats:\n\n" + s.Patch.Stats().String()
+}
+
+func (s *statusSnapshot) commitsString() string {
+	if s.Commits == nil {
+		return ""
+	}
+
+	builder := &strings.Builder{}
+	builder.WriteString("\nCommits:\n\n")
+
+	for _, commit := range s.Commits {
+		msg := "<empty message>"
+
+		msgParts := strings.Split(commit.Message, "\n")
+		if len(msgParts) > 0 {
+			msg = msgParts[0]
+		}
+
+		builder.WriteString(commit.ID().String())
+		builder.WriteString(": ")
+		builder.WriteString(msg)
+	}
+
+	return builder.String()
 }
