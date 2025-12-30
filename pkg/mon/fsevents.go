@@ -37,7 +37,7 @@ func getEventType(event fsnotify.Event) EventType {
 }
 
 func (m *Mon) ignoreEvent(event fsnotify.Event) bool {
-	if strings.Contains(event.Name, ".git") && event.Name != m.gitLogPath {
+	if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
 		return true
 	}
 
