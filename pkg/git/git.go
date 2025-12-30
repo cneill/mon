@@ -127,10 +127,12 @@ func UnstagedChangeCount(repo *git.Repository) (int64, error) {
 	}
 
 	var count int64
+
 	for file, fileStatus := range status {
-		switch fileStatus.Worktree {
+		switch fileStatus.Worktree { //nolint:exhaustive
 		case git.Modified, git.Deleted, git.Renamed:
 			slog.Debug("unstaged change", "file", file, "status", string(fileStatus.Worktree))
+
 			count++
 		}
 	}

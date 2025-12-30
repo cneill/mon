@@ -127,7 +127,7 @@ func (m *Mon) Run(_ context.Context) error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	snapshot := m.getStatusSnapshot()
+	snapshot := m.getStatusSnapshot(true)
 	fmt.Println("\n" + snapshot.Final())
 
 	return nil
