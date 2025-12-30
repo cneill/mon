@@ -18,6 +18,7 @@ const clearLine = "\r\033[K" // Carriage return + clear to end of line
 //nolint:gochecknoglobals
 var (
 	labelColor     = color.RGB(255, 255, 255).Add(color.Bold)
+	sublabelColor  = color.RGB(200, 200, 200)
 	separatorColor = color.RGB(50, 50, 50).Add(color.Bold)
 	addedColor     = color.RGB(0, 255, 0)
 	removedColor   = color.RGB(255, 0, 0)
@@ -91,6 +92,8 @@ type statusSnapshot struct {
 
 func (s *statusSnapshot) String() string {
 	builder := &strings.Builder{}
+	builder.Grow(50)
+
 	builder.WriteString(labelColor.Sprint("Files: "))
 	builder.WriteString(addedColor.Sprint("+" + s.FilesCreated))
 	builder.WriteString(" / ")
@@ -115,23 +118,24 @@ func (s *statusSnapshot) String() string {
 
 func (s *statusSnapshot) Final() string {
 	builder := &strings.Builder{}
+	builder.Grow(50)
 
 	builder.WriteString(labelColor.Sprint("Session stats:\n"))
 
 	builder.WriteString(indent)
-	builder.WriteString("Files: ")
+	builder.WriteString(sublabelColor.Sprint("Files: "))
 	builder.WriteString(addedColor.Sprint(s.FilesCreated + " created"))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint(s.FilesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
 	builder.WriteString(indent)
-	builder.WriteString("Commits: ")
+	builder.WriteString(sublabelColor.Sprint("Commits: "))
 	builder.WriteString(color.YellowString("+" + s.NumCommits))
 	builder.WriteRune('\n')
 
 	builder.WriteString(indent)
-	builder.WriteString("Lines: ")
+	builder.WriteString(sublabelColor.Sprint("Lines: "))
 	builder.WriteString(addedColor.Sprint(s.LinesAdded + " added"))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint(s.LinesDeleted + " deleted"))
@@ -139,7 +143,7 @@ func (s *statusSnapshot) Final() string {
 
 	if s.UnstagedChanges != "0" {
 		builder.WriteString(indent)
-		builder.WriteString("Unstaged file changes: ")
+		builder.WriteString(sublabelColor.Sprint("Unstaged file changes: "))
 		builder.WriteString(color.CyanString(s.UnstagedChanges))
 		builder.WriteRune('\n')
 	}
@@ -162,8 +166,9 @@ func (s *statusSnapshot) patchString() string {
 
 	for _, fileStats := range stats {
 		totalChanges := strconv.FormatInt(int64(fileStats.Addition)+int64(fileStats.Deletion), 10)
+
 		builder.WriteString(indent)
-		builder.WriteString(labelColor.Sprint(fileStats.Name))
+		builder.WriteString(sublabelColor.Sprint(fileStats.Name))
 		builder.WriteString(separator)
 		builder.WriteString(totalChanges)
 		builder.WriteRune(' ')
@@ -193,7 +198,7 @@ func (s *statusSnapshot) commitsString() string {
 		}
 
 		builder.WriteString(indent)
-		builder.WriteString(addedColor.Add(color.Bold).Sprint(commit.ID().String()))
+		builder.WriteString(sublabelColor.Sprint(commit.ID().String()))
 		builder.WriteString(": ")
 		builder.WriteString(msg)
 	}
