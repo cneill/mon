@@ -167,9 +167,9 @@ func (s *statusSnapshot) commitsString() string {
 			msg = msgParts[0]
 		}
 
-		builder.WriteString(commit.ID().String())
+		builder.WriteString(labelColor.Sprint(commit.ID().String()))
 		builder.WriteString(": ")
-		builder.WriteString(msg)
+		builder.WriteString(separatorColor.Sprint(msg))
 	}
 
 	return builder.String()
