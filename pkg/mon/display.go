@@ -18,7 +18,7 @@ const clearLine = "\r\033[K" // Carriage return + clear to end of line
 //nolint:gochecknoglobals
 var (
 	labelColor     = color.RGB(255, 255, 255).Add(color.Bold)
-	sublabelColor  = color.RGB(200, 200, 200)
+	sublabelColor  = color.RGB(150, 150, 150).Add(color.Italic)
 	separatorColor = color.RGB(50, 50, 50).Add(color.Bold)
 	addedColor     = color.RGB(0, 255, 0)
 	removedColor   = color.RGB(255, 0, 0)
@@ -105,12 +105,12 @@ func (s *statusSnapshot) String() string {
 	builder.WriteString(removedColor.Sprint("-" + s.LinesDeleted))
 	builder.WriteString(separator)
 	builder.WriteString(labelColor.Sprint("Commits: "))
-	builder.WriteString(color.YellowString(s.NumCommits))
+	builder.WriteString(addedColor.Sprint(s.NumCommits))
 
 	if s.UnstagedChanges != "0" {
 		builder.WriteString(separator)
 		builder.WriteString(labelColor.Sprint("Unstaged file changes: "))
-		builder.WriteString(color.CyanString(s.UnstagedChanges))
+		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
 	}
 
 	return builder.String()
@@ -131,7 +131,7 @@ func (s *statusSnapshot) Final() string {
 
 	builder.WriteString(indent)
 	builder.WriteString(sublabelColor.Sprint("Commits: "))
-	builder.WriteString(color.YellowString("+" + s.NumCommits))
+	builder.WriteString(addedColor.Sprint(s.NumCommits))
 	builder.WriteRune('\n')
 
 	builder.WriteString(indent)
@@ -144,7 +144,7 @@ func (s *statusSnapshot) Final() string {
 	if s.UnstagedChanges != "0" {
 		builder.WriteString(indent)
 		builder.WriteString(sublabelColor.Sprint("Unstaged file changes: "))
-		builder.WriteString(color.CyanString(s.UnstagedChanges))
+		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
 		builder.WriteRune('\n')
 	}
 
@@ -155,7 +155,7 @@ func (s *statusSnapshot) Final() string {
 }
 
 func (s *statusSnapshot) patchString() string {
-	if s.Patch == nil {
+	if s.Patch == nil || s.NumCommits == "0" {
 		return ""
 	}
 
@@ -177,7 +177,6 @@ func (s *statusSnapshot) patchString() string {
 		builder.WriteRune('\n')
 	}
 
-	// return "\nPatch stats:\n" + s.Patch.Stats().String()
 	return builder.String()
 }
 
