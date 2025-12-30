@@ -125,7 +125,7 @@ func (s *statusSnapshot) Final() string {
 	builder.WriteString(indent)
 	builder.WriteString(sublabelColor.Sprint("Files: "))
 	builder.WriteString(addedColor.Sprint(s.FilesCreated + " created"))
-	builder.WriteString(" / ")
+	builder.WriteString(separator)
 	builder.WriteString(removedColor.Sprint(s.FilesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
@@ -137,7 +137,7 @@ func (s *statusSnapshot) Final() string {
 	builder.WriteString(indent)
 	builder.WriteString(sublabelColor.Sprint("Lines: "))
 	builder.WriteString(addedColor.Sprint(s.LinesAdded + " added"))
-	builder.WriteString(" / ")
+	builder.WriteString(separator)
 	builder.WriteString(removedColor.Sprint(s.LinesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
@@ -198,7 +198,7 @@ func (s *statusSnapshot) commitsString() string {
 
 		builder.WriteString(indent)
 		builder.WriteString(sublabelColor.Sprint(commit.ID().String()))
-		builder.WriteString(": ")
+		builder.WriteString(separator)
 		builder.WriteString(msg)
 	}
 
