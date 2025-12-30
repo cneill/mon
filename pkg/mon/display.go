@@ -200,6 +200,7 @@ func (s *statusSnapshot) commitsString() string {
 		builder.WriteString(sublabelColor.Sprint(commit.ID().String()))
 		builder.WriteString(separator)
 		builder.WriteString(msg)
+		builder.WriteRune('\n')
 	}
 
 	return builder.String()
