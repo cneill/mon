@@ -49,8 +49,8 @@ type Mon struct {
 	mutex             sync.Mutex
 	initialHash       string
 	lastProcessedHash string
-	filesCreated      atomic.Int64
-	filesDeleted      atomic.Int64
+	filesCreated      atomic.Int64 // TODO: track with git?
+	filesDeleted      atomic.Int64 // TODO: track with git?
 	commits           atomic.Int64
 	linesAdded        atomic.Int64
 	linesDeleted      atomic.Int64

@@ -50,7 +50,7 @@ func (m *Mon) ignoreEvent(event fsnotify.Event) bool {
 	return false
 }
 
-func (m *Mon) handleEvents() {
+func (m *Mon) handleEvents() { //nolint:cyclop
 	if m.watcher == nil {
 		panic(fmt.Errorf("watcher wasn't set up first to monitor events"))
 	}
