@@ -18,7 +18,7 @@ const clearLine = "\r\033[K" // Carriage return + clear to end of line
 //nolint:gochecknoglobals
 var (
 	labelColor     = color.RGB(255, 255, 255).Add(color.Bold)
-	sublabelColor  = color.RGB(150, 150, 150).Add(color.Italic)
+	sublabelColor  = color.RGB(120, 120, 120).Add(color.Italic)
 	separatorColor = color.RGB(50, 50, 50).Add(color.Bold)
 	addedColor     = color.RGB(0, 255, 0)
 	removedColor   = color.RGB(255, 0, 0)
