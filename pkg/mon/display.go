@@ -116,24 +116,30 @@ func (s *statusSnapshot) String() string {
 func (s *statusSnapshot) Final() string {
 	builder := &strings.Builder{}
 
-	builder.WriteString("Session stats:\n")
+	builder.WriteString(labelColor.Sprint("Session stats:\n"))
 
-	builder.WriteString(indent + "- Files: ")
+	builder.WriteString(indent)
+	builder.WriteString("Files: ")
 	builder.WriteString(addedColor.Sprint(s.FilesCreated + " created"))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint(s.FilesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
-	builder.WriteString(indent + "- Commits: " + color.YellowString("+"+s.NumCommits) + "\n")
+	builder.WriteString(indent)
+	builder.WriteString("Commits: ")
+	builder.WriteString(color.YellowString("+" + s.NumCommits))
+	builder.WriteRune('\n')
 
-	builder.WriteString(indent + "- Lines: ")
+	builder.WriteString(indent)
+	builder.WriteString("Lines: ")
 	builder.WriteString(addedColor.Sprint(s.LinesAdded + " added"))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint(s.LinesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
 	if s.UnstagedChanges != "0" {
-		builder.WriteString(indent + "- Unstaged file changes: ")
+		builder.WriteString(indent)
+		builder.WriteString("Unstaged file changes: ")
 		builder.WriteString(color.CyanString(s.UnstagedChanges))
 		builder.WriteRune('\n')
 	}
@@ -149,7 +155,25 @@ func (s *statusSnapshot) patchString() string {
 		return ""
 	}
 
-	return "\nPatch stats:\n\n" + s.Patch.Stats().String()
+	stats := s.Patch.Stats()
+
+	builder := &strings.Builder{}
+	builder.WriteString(labelColor.Sprint("\nPatch stats:\n"))
+
+	for _, fileStats := range stats {
+		totalChanges := strconv.FormatInt(int64(fileStats.Addition)+int64(fileStats.Deletion), 10)
+		builder.WriteString(indent)
+		builder.WriteString(labelColor.Sprint(fileStats.Name))
+		builder.WriteString(separator)
+		builder.WriteString(totalChanges)
+		builder.WriteRune(' ')
+		builder.WriteString(addedColor.Sprint(strings.Repeat("+", fileStats.Addition)))
+		builder.WriteString(removedColor.Sprint(strings.Repeat("-", fileStats.Deletion)))
+		builder.WriteRune('\n')
+	}
+
+	// return "\nPatch stats:\n" + s.Patch.Stats().String()
+	return builder.String()
 }
 
 func (s *statusSnapshot) commitsString() string {
@@ -158,7 +182,7 @@ func (s *statusSnapshot) commitsString() string {
 	}
 
 	builder := &strings.Builder{}
-	builder.WriteString("\nCommits:\n\n")
+	builder.WriteString(labelColor.Sprint("\nCommits:\n"))
 
 	for _, commit := range s.Commits {
 		msg := "<empty message>"
@@ -168,7 +192,7 @@ func (s *statusSnapshot) commitsString() string {
 			msg = msgParts[0]
 		}
 
-		builder.WriteString(indent + "- ")
+		builder.WriteString(indent)
 		builder.WriteString(addedColor.Add(color.Bold).Sprint(commit.ID().String()))
 		builder.WriteString(": ")
 		builder.WriteString(msg)
