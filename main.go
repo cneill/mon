@@ -51,7 +51,6 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	opts := &mon.Opts{
-		GitWatch:   cmd.Bool(FlagGitWatch),
 		NoColor:    cmd.Bool(FlagNoColor),
 		ProjectDir: projectDir,
 	}

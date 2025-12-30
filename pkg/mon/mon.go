@@ -20,7 +20,6 @@ import (
 )
 
 type Opts struct {
-	GitWatch   bool
 	NoColor    bool
 	ProjectDir string
 }
