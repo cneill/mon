@@ -2,7 +2,15 @@
 
 Track what your agent(s) do while you're not watching.
 
-**Install:** `go install github.com/cneill/mon@latest`
+## Installation
+
+**With Go:**
+
+```bash
+go install github.com/cneill/mon@latest
+```
+
+[**Grab the latest release**](https://github.com/cneill/mon/releases/latest)
 
 ## Flags
 
