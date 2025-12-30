@@ -22,6 +22,7 @@ var (
 	addedColor     = color.RGB(0, 255, 0)
 	removedColor   = color.RGB(255, 0, 0)
 	separator      = separatorColor.Sprint(" ][ ")
+	indent         = "  "
 )
 
 func (m *Mon) displayLoop() {
@@ -117,22 +118,22 @@ func (s *statusSnapshot) Final() string {
 
 	builder.WriteString("Session stats:\n")
 
-	builder.WriteString("\t-Files: ")
+	builder.WriteString(indent + "- Files: ")
 	builder.WriteString(addedColor.Sprint(s.FilesCreated + " created"))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint(s.FilesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
-	builder.WriteString("\t- Commits: " + color.YellowString("+"+s.NumCommits) + "\n")
+	builder.WriteString(indent + "- Commits: " + color.YellowString("+"+s.NumCommits) + "\n")
 
-	builder.WriteString("\t- Lines: ")
+	builder.WriteString(indent + "- Lines: ")
 	builder.WriteString(addedColor.Sprint(s.LinesAdded + " added"))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint(s.LinesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
 	if s.UnstagedChanges != "0" {
-		builder.WriteString(" - Unstaged file changes: ")
+		builder.WriteString(indent + "- Unstaged file changes: ")
 		builder.WriteString(color.CyanString(s.UnstagedChanges))
 		builder.WriteRune('\n')
 	}
@@ -167,7 +168,7 @@ func (s *statusSnapshot) commitsString() string {
 			msg = msgParts[0]
 		}
 
-		builder.WriteString("\t- ")
+		builder.WriteString(indent + "- ")
 		builder.WriteString(addedColor.Add(color.Bold).Sprint(commit.ID().String()))
 		builder.WriteString(": ")
 		builder.WriteString(msg)
