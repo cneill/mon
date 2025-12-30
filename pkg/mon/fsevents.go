@@ -36,12 +36,12 @@ func getEventType(event fsnotify.Event) EventType {
 	return EventTypeUnknown
 }
 
-func ignoreEvent(event fsnotify.Event) bool {
-	if strings.HasPrefix(event.Name, ".git") {
+func (m *Mon) ignoreEvent(event fsnotify.Event) bool {
+	if strings.Contains(event.Name, ".git") && event.Name != m.gitLogPath {
 		return true
 	}
 
-	// Ignore editor temp files: backups (~, .swp), swap (numeric names)
+	// Ignore VIM temp files: backups (~, .swp), swap (numeric names)
 	base := filepath.Base(event.Name)
 	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {
 		return true
@@ -62,7 +62,7 @@ func (m *Mon) handleEvents() {
 				return
 			}
 
-			if ignoreEvent(event) {
+			if m.ignoreEvent(event) {
 				continue
 			}
 
@@ -73,16 +73,14 @@ func (m *Mon) handleEvents() {
 				continue
 			}
 
-			switch eventType {
+			switch eventType { //nolint:exhaustive
 			case EventTypeCreate:
 				if err := m.handleCreate(event); err != nil {
 					slog.Error("failed to handle create event", "error", err)
 				}
 
 			case EventTypeRemove, EventTypeRename:
-				if err := m.handleRemoveOrRename(event); err != nil {
-					slog.Error("failed to handle "+string(eventType)+" event: %w", "error", err)
-				}
+				m.handleRemoveOrRename(event)
 
 			case EventTypeWrite:
 				time.Sleep(time.Millisecond * 250) // allow write+delete pairs to settle before checking
@@ -119,7 +117,11 @@ func isNumeric(s string) bool {
 func (m *Mon) handleCreate(event fsnotify.Event) error {
 	// Check for matching pending delete
 	if pdI, pending := m.pendingDeletes.LoadAndDelete(event.Name); pending {
-		pd := pdI.(pendingDelete)
+		pd, ok := pdI.(pendingDelete)
+		if !ok {
+			return fmt.Errorf("failed to check for a pending delete for file %q", event.Name)
+		}
+
 		if pd.wasNewFile {
 			// Restore to newFiles, no count change needed
 			m.newFiles.Store(event.Name, struct{}{})
@@ -145,13 +147,15 @@ func (m *Mon) handleCreate(event fsnotify.Event) error {
 	}
 
 	if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
-		m.addRecursiveWatchesForDir(event.Name)
+		if err := m.addRecursiveWatchesForDir(event.Name); err != nil {
+			return fmt.Errorf("failed to add watcher for new dir %q: %w", event.Name, err)
+		}
 	}
 
 	return nil
 }
 
-func (m *Mon) handleRemoveOrRename(event fsnotify.Event) error {
+func (m *Mon) handleRemoveOrRename(event fsnotify.Event) {
 	// Check if in newFiles first
 	if _, exists := m.newFiles.LoadAndDelete(event.Name); exists {
 		slog.Debug("pending delete (new file)", "name", event.Name)
@@ -160,7 +164,7 @@ func (m *Mon) handleRemoveOrRename(event fsnotify.Event) error {
 			wasNewFile: true,
 		})
 
-		return nil
+		return
 	}
 
 	// Check if in initialFiles
@@ -171,6 +175,4 @@ func (m *Mon) handleRemoveOrRename(event fsnotify.Event) error {
 			wasNewFile: false,
 		})
 	}
-
-	return nil
 }
