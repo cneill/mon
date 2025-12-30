@@ -27,6 +27,7 @@ func generalFlags() []cli.Flag {
 			Category: category,
 			Sources:  cli.EnvVars(EnvDebug),
 			Value:    false,
+			Usage:    "Write debug logs to a file (mon_debug.log) in current directory.",
 		},
 		&cli.BoolFlag{
 			Name:     FlagNoColor,
@@ -34,6 +35,7 @@ func generalFlags() []cli.Flag {
 			Category: category,
 			Sources:  cli.EnvVars(EnvNoColor),
 			Value:    false,
+			Usage:    "Disable coloration.",
 		},
 	}
 }
@@ -53,6 +55,7 @@ func projectFlags() []cli.Flag {
 			Category: category,
 			Sources:  cli.EnvVars(category),
 			Value:    ".",
+			Usage:    "The `DIRECTORY` you want to monitor.",
 		},
 	}
 }
