@@ -41,12 +41,14 @@ func getEventType(event fsnotify.Event) EventType {
 
 func (m *Mon) ignoreEvent(event fsnotify.Event) bool {
 	if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
+		slog.Debug("ignoring file event in .git directory")
 		return true
 	}
 
 	// Ignore VIM temp files: backups (~, .swp), swap (numeric names)
 	base := filepath.Base(event.Name)
 	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {
+		slog.Debug("ignoring editor file swaps")
 		return true
 	}
 

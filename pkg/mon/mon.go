@@ -152,7 +152,7 @@ func (m *Mon) populateInitialFiles() error {
 			return err
 		}
 
-		if de.IsDir() || strings.Contains(path, ".git") {
+		if de.IsDir() || strings.Contains(path, ".git/") {
 			if de.IsDir() && filepath.Base(path) == ".git" {
 				return filepath.SkipDir
 			}
@@ -233,7 +233,7 @@ func (m *Mon) addRecursiveWatchesForDir(dir string) error {
 			return nil
 		}
 
-		if strings.Contains(path, ".git") {
+		if filepath.Base(path) == ".git" {
 			return filepath.SkipDir
 		}
 
