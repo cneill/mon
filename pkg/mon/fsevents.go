@@ -15,6 +15,7 @@ type EventType string
 
 const (
 	EventTypeUnknown EventType = "unknown"
+	EventTypeChmod   EventType = "chmod"
 	EventTypeCreate  EventType = "create"
 	EventTypeRemove  EventType = "remove"
 	EventTypeRename  EventType = "rename"
@@ -23,13 +24,15 @@ const (
 
 func getEventType(event fsnotify.Event) EventType {
 	switch {
-	case event.Op&fsnotify.Create != 0:
+	case event.Has(fsnotify.Chmod):
+		return EventTypeChmod
+	case event.Has(fsnotify.Create):
 		return EventTypeCreate
-	case event.Op&fsnotify.Remove != 0:
+	case event.Has(fsnotify.Remove):
 		return EventTypeRemove
-	case event.Op&fsnotify.Rename != 0:
+	case event.Has(fsnotify.Rename):
 		return EventTypeRename
-	case event.Op&fsnotify.Write != 0:
+	case event.Has(fsnotify.Write):
 		return EventTypeWrite
 	}
 
@@ -68,7 +71,7 @@ func (m *Mon) handleEvents() { //nolint:cyclop
 
 			eventType := getEventType(event)
 
-			if event.Name == m.gitLogPath && (event.Op&(fsnotify.Write|fsnotify.Chmod) != 0) {
+			if event.Name == m.gitLogPath && (eventType == EventTypeWrite || eventType == EventTypeChmod) {
 				go m.processGitChange()
 				continue
 			}
