@@ -105,3 +105,33 @@ func (f *FileMap) Get(name string) (FileInfo, error) {
 
 	return *file, nil
 }
+
+func (f *FileMap) NewFiles() []string {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	results := []string{}
+
+	for name, info := range f.files {
+		if info.FileType == FileTypeNew {
+			results = append(results, name)
+		}
+	}
+
+	return results
+}
+
+func (f *FileMap) DeletedFiles() []string {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	results := []string{}
+
+	for name, info := range f.files {
+		if info.WasDeleted {
+			results = append(results, name)
+		}
+	}
+
+	return results
+}

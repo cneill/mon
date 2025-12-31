@@ -51,11 +51,14 @@ func (m *Mon) triggerDisplay() {
 }
 
 func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
-	fileStats := m.FileMonitor.Stats()
+	fileStats := m.FileMonitor.Stats(final)
 
 	snapshot := &statusSnapshot{
-		FilesCreated:    strconv.FormatInt(fileStats.FilesCreated, 10),
-		FilesDeleted:    strconv.FormatInt(fileStats.FilesDeleted, 10),
+		NumFilesCreated: strconv.FormatInt(fileStats.NumFilesCreated, 10),
+		NumFilesDeleted: strconv.FormatInt(fileStats.NumFilesDeleted, 10),
+		NewFiles:        fileStats.NewFiles,
+		DeletedFiles:    fileStats.DeletedFiles,
+
 		NumCommits:      strconv.FormatInt(m.commits.Load(), 10),
 		LinesAdded:      strconv.FormatInt(m.linesAdded.Load(), 10),
 		LinesDeleted:    strconv.FormatInt(m.linesDeleted.Load(), 10),
@@ -82,8 +85,11 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 }
 
 type statusSnapshot struct {
-	FilesCreated    string
-	FilesDeleted    string
+	NumFilesCreated string
+	NumFilesDeleted string
+	NewFiles        []string
+	DeletedFiles    []string
+
 	NumCommits      string
 	LinesAdded      string
 	LinesDeleted    string
@@ -97,9 +103,9 @@ func (s *statusSnapshot) String() string {
 	builder.Grow(50)
 
 	builder.WriteString(labelColor.Sprint("Files: "))
-	builder.WriteString(addedColor.Sprint("+" + s.FilesCreated))
+	builder.WriteString(addedColor.Sprint("+" + s.NumFilesCreated))
 	builder.WriteString(" / ")
-	builder.WriteString(removedColor.Sprint("-" + s.FilesDeleted))
+	builder.WriteString(removedColor.Sprint("-" + s.NumFilesDeleted))
 	builder.WriteString(separator)
 	builder.WriteString(labelColor.Sprint("Lines committed: "))
 	builder.WriteString(addedColor.Sprint("+" + s.LinesAdded))
@@ -126,9 +132,9 @@ func (s *statusSnapshot) Final() string {
 
 	builder.WriteString(indent)
 	builder.WriteString(sublabelColor.Sprint("Files: "))
-	builder.WriteString(addedColor.Sprint(s.FilesCreated + " created"))
+	builder.WriteString(addedColor.Sprint(s.NumFilesCreated + " created"))
 	builder.WriteString(separator)
-	builder.WriteString(removedColor.Sprint(s.FilesDeleted + " deleted"))
+	builder.WriteString(removedColor.Sprint(s.NumFilesDeleted + " deleted"))
 	builder.WriteRune('\n')
 
 	builder.WriteString(indent)
@@ -150,8 +156,35 @@ func (s *statusSnapshot) Final() string {
 		builder.WriteRune('\n')
 	}
 
+	builder.WriteString(s.filesString())
 	builder.WriteString(s.patchString())
 	builder.WriteString(s.commitsString())
+
+	return builder.String()
+}
+
+func (s *statusSnapshot) filesString() string {
+	if len(s.NewFiles) == 0 && len(s.DeletedFiles) == 0 {
+		return ""
+	}
+
+	builder := &strings.Builder{}
+
+	if len(s.NewFiles) > 0 {
+		builder.WriteString(labelColor.Sprint("\nNew files:\n"))
+
+		for _, file := range s.NewFiles {
+			builder.WriteString(indent + "- " + file + "\n")
+		}
+	}
+
+	if len(s.DeletedFiles) > 0 {
+		builder.WriteString(labelColor.Sprint("\nDeleted files:\n"))
+
+		for _, file := range s.DeletedFiles {
+			builder.WriteString(indent + "- " + file + "\n")
+		}
+	}
 
 	return builder.String()
 }
