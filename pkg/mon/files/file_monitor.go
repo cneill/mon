@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -131,6 +132,10 @@ func (f *FileMonitor) Run(ctx context.Context) {
 				Op:   event.Op,
 			}
 
+			if f.ignoreEvent(wrapped) {
+				continue
+			}
+
 			switch wrapped.Type() {
 			case EventTypeCreate:
 				if err := f.handleCreate(wrapped); err != nil {
@@ -161,6 +166,37 @@ func (f *FileMonitor) Close() {
 	if err := f.watcher.Close(); err != nil {
 		slog.Error("Failed to shut down fsnotify watcher", "error", err)
 	}
+}
+
+func (f *FileMonitor) ignoreEvent(event Event) bool {
+	// TODO
+	// if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
+	// 	slog.Debug("ignoring file event in .git directory")
+	// 	return true
+	// }
+
+	// Ignore VIM temp files: backups (~, .swp), swap (numeric names)
+	base := filepath.Base(event.Name)
+	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {
+		slog.Debug("ignoring editor file swaps")
+		return true
+	}
+
+	return false
+}
+
+func isNumeric(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (f *FileMonitor) populateInitialFiles() error {
