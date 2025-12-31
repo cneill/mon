@@ -51,9 +51,11 @@ func (m *Mon) triggerDisplay() {
 }
 
 func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
+	fileStats := m.FileMonitor.Stats()
+
 	snapshot := &statusSnapshot{
-		FilesCreated:    strconv.FormatInt(m.filesCreated.Load(), 10),
-		FilesDeleted:    strconv.FormatInt(m.filesDeleted.Load(), 10),
+		FilesCreated:    strconv.FormatInt(fileStats.FilesCreated, 10),
+		FilesDeleted:    strconv.FormatInt(fileStats.FilesDeleted, 10),
 		NumCommits:      strconv.FormatInt(m.commits.Load(), 10),
 		LinesAdded:      strconv.FormatInt(m.linesAdded.Load(), 10),
 		LinesDeleted:    strconv.FormatInt(m.linesDeleted.Load(), 10),
