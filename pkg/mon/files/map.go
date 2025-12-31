@@ -56,7 +56,7 @@ func (f *FileMap) AddFile(name string, info FileInfo) error {
 		if !file.IsInitial() {
 			f.filesCreated++
 		}
-	} else {
+	} else if info.FileType != FileTypeInitial {
 		f.filesCreated++
 	}
 
