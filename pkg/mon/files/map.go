@@ -91,6 +91,7 @@ func (f *FileMap) Delete(name string) error {
 		f.filesDeleted++
 	} else {
 		delete(f.files, name)
+		f.filesCreated--
 	}
 
 	return nil
