@@ -73,6 +73,8 @@ func (f *FileMonitor) handleCreate(event Event) error {
 		return fmt.Errorf("failed to add new file %q upon creation event: %w", event.Name, err)
 	}
 
+	slog.Debug("Added new file", "name", event.Name)
+
 	if fi.IsDir() {
 		if err := f.WatchDirRecursive(event.Name); err != nil {
 			return err
