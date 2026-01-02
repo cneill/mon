@@ -2,13 +2,11 @@ package mon
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/cneill/mon/pkg/git"
 	"github.com/fatih/color"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -50,40 +48,6 @@ func (m *Mon) triggerDisplay() {
 	}
 }
 
-func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
-	fileStats := m.FileMonitor.Stats(final)
-
-	snapshot := &statusSnapshot{
-		NumFilesCreated: strconv.FormatInt(fileStats.NumFilesCreated, 10),
-		NumFilesDeleted: strconv.FormatInt(fileStats.NumFilesDeleted, 10),
-		NewFiles:        fileStats.NewFiles,
-		DeletedFiles:    fileStats.DeletedFiles,
-
-		NumCommits:      strconv.FormatInt(m.commits.Load(), 10),
-		LinesAdded:      strconv.FormatInt(m.linesAdded.Load(), 10),
-		LinesDeleted:    strconv.FormatInt(m.linesDeleted.Load(), 10),
-		UnstagedChanges: strconv.FormatInt(m.unstagedChanges.Load(), 10),
-	}
-
-	if final {
-		commits, err := git.CommitsSince(m.repo, m.initialHash)
-		if err != nil {
-			slog.Error("failed to collect commits since initial hash", "initial_hash", m.initialHash, "error", err)
-		}
-
-		snapshot.Commits = commits
-
-		patch, err := git.PatchSince(m.repo, m.initialHash)
-		if err != nil {
-			slog.Error("failed to generate patch since initial hash", "initial_hash", m.initialHash, "error", err)
-		}
-
-		snapshot.Patch = patch
-	}
-
-	return snapshot
-}
-
 type statusSnapshot struct {
 	NumFilesCreated string
 	NumFilesDeleted string
@@ -96,6 +60,27 @@ type statusSnapshot struct {
 	UnstagedChanges string
 	Commits         []*object.Commit
 	Patch           *object.Patch
+}
+
+func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
+	fileStats := m.fileMonitor.Stats(final)
+	gitStats := m.gitMonitor.Stats(final)
+
+	snapshot := &statusSnapshot{
+		NumFilesCreated: strconv.FormatInt(fileStats.NumFilesCreated, 10),
+		NumFilesDeleted: strconv.FormatInt(fileStats.NumFilesDeleted, 10),
+		NewFiles:        fileStats.NewFiles,
+		DeletedFiles:    fileStats.DeletedFiles,
+
+		NumCommits:      strconv.FormatInt(gitStats.NumCommits, 10),
+		LinesAdded:      strconv.FormatInt(gitStats.LinesAdded, 10),
+		LinesDeleted:    strconv.FormatInt(gitStats.LinesDeleted, 10),
+		UnstagedChanges: strconv.FormatInt(gitStats.UnstagedChanges, 10),
+		Commits:         gitStats.Commits,
+		Patch:           gitStats.Patch,
+	}
+
+	return snapshot
 }
 
 func (s *statusSnapshot) String() string {

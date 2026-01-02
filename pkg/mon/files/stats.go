@@ -7,15 +7,15 @@ type Stats struct {
 	DeletedFiles    []string
 }
 
-func (f *FileMonitor) Stats(final bool) *Stats {
+func (m *Monitor) Stats(final bool) *Stats {
 	stats := &Stats{
-		NumFilesCreated: f.fileMap.filesCreated,
-		NumFilesDeleted: f.fileMap.filesDeleted,
+		NumFilesCreated: m.fileMap.filesCreated,
+		NumFilesDeleted: m.fileMap.filesDeleted,
 	}
 
 	if final {
-		stats.NewFiles = f.fileMap.NewFiles()
-		stats.DeletedFiles = f.fileMap.DeletedFiles()
+		stats.NewFiles = m.fileMap.NewFiles()
+		stats.DeletedFiles = m.fileMap.DeletedFiles()
 	}
 
 	return stats

@@ -43,19 +43,19 @@ func (e Event) Type() EventType {
 	return EventTypeUnknown
 }
 
-func (f *FileMonitor) handleCreate(event Event) error {
-	f.pendingDeleteMutex.Lock()
+func (m *Monitor) handleCreate(event Event) error {
+	m.pendingDeleteMutex.Lock()
 
-	if _, ok := f.pendingDeletes[event.Name]; ok {
-		delete(f.pendingDeletes, event.Name)
+	if _, ok := m.pendingDeletes[event.Name]; ok {
+		delete(m.pendingDeletes, event.Name)
 		slog.Debug("ignored delete+create pair", "name", event.Name)
 
 		return nil
 	}
 
-	f.pendingDeleteMutex.Unlock()
+	m.pendingDeleteMutex.Unlock()
 
-	if _, err := f.fileMap.Get(event.Name); !errors.Is(err, ErrUnknownFile) {
+	if _, err := m.fileMap.Get(event.Name); !errors.Is(err, ErrUnknownFile) {
 		return fmt.Errorf("creation request for file %q that already exists", event.Name)
 	}
 
@@ -69,25 +69,25 @@ func (f *FileMonitor) handleCreate(event Event) error {
 		FileType: FileTypeNew,
 	}
 
-	if err := f.fileMap.AddFile(event.Name, info); err != nil {
+	if err := m.fileMap.AddFile(event.Name, info); err != nil {
 		return fmt.Errorf("failed to add new file %q upon creation event: %w", event.Name, err)
 	}
 
 	slog.Debug("Added new file", "name", event.Name)
 
 	if fi.IsDir() {
-		if err := f.WatchDirRecursive(event.Name); err != nil {
+		if err := m.WatchDirRecursive(event.Name); err != nil {
 			return err
 		}
 	}
 
-	f.Events <- event
+	m.Events <- event
 
 	return nil
 }
 
-func (f *FileMonitor) handleRemoveOrRename(event Event) error {
-	file, err := f.fileMap.Get(event.Name)
+func (m *Monitor) handleRemoveOrRename(event Event) error {
+	file, err := m.fileMap.Get(event.Name)
 	if err != nil {
 		return fmt.Errorf("got remove/rename event for unknown file %q", event.Name)
 	}
@@ -100,9 +100,9 @@ func (f *FileMonitor) handleRemoveOrRename(event Event) error {
 
 	slog.Debug("pending delete", "name", event.Name, "type", file.FileType)
 
-	f.pendingDeleteMutex.Lock()
-	f.pendingDeletes[event.Name] = pd
-	f.pendingDeleteMutex.Unlock()
+	m.pendingDeleteMutex.Lock()
+	m.pendingDeletes[event.Name] = pd
+	m.pendingDeleteMutex.Unlock()
 
 	return nil
 }

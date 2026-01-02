@@ -8,27 +8,28 @@ import (
 	"time"
 
 	"github.com/cneill/mon/pkg/mon/files"
+	"github.com/cneill/mon/pkg/mon/git"
 )
 
 func (m *Mon) handleFSEvents(ctx context.Context) {
-	go m.FileMonitor.Run(ctx)
+	go m.fileMonitor.Run(ctx)
+	defer m.fileMonitor.Close()
+
+	go m.gitMonitor.Run(ctx)
+	defer m.gitMonitor.Close()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 
-		case event, ok := <-m.FileMonitor.Events:
+		case event, ok := <-m.fileMonitor.Events:
 			if !ok {
+				slog.Info("file monitor shut down")
 				return
 			}
 
 			if m.ignoreEvent(event) {
-				continue
-			}
-
-			if event.Name == m.gitLogPath && (event.Type() == files.EventTypeWrite || event.Type() == files.EventTypeChmod) {
-				go m.processGitChange()
 				continue
 			}
 
@@ -41,18 +42,29 @@ func (m *Mon) handleFSEvents(ctx context.Context) {
 				if m.writeLimiter.Allow() {
 					m.writeLimiter.Reserve()
 
-					go m.processGitChange()
+					m.gitMonitor.FileEvents <- event
 				}
+			}
+
+		case event, ok := <-m.gitMonitor.GitEvents:
+			if !ok {
+				slog.Info("git monitor shut down")
+				return
+			}
+
+			switch event.Type {
+			case git.EventTypeNewCommit:
+				m.triggerDisplay()
 			}
 		}
 	}
 }
 
 func (m *Mon) ignoreEvent(event files.Event) bool {
-	if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
-		slog.Debug("ignoring file event in .git directory")
-		return true
-	}
+	// if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
+	// 	slog.Debug("ignoring file event in .git directory")
+	// 	return true
+	// }
 
 	// Ignore VIM temp files: backups (~, .swp), swap (numeric names)
 	base := filepath.Base(event.Name)

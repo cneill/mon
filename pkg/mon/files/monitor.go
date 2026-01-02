@@ -13,19 +13,20 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-type FileMonitorOpts struct {
-	RootPath string
+type MonitorOpts struct {
+	RootPath  string
+	WatchRoot bool
 }
 
-func (o *FileMonitorOpts) OK() error {
-	if o.RootPath == "" {
+func (m *MonitorOpts) OK() error {
+	if m.RootPath == "" {
 		return fmt.Errorf("must supply root path")
 	}
 
 	return nil
 }
 
-type FileMonitor struct {
+type Monitor struct {
 	Events chan Event
 
 	rootPath string
@@ -38,9 +39,9 @@ type FileMonitor struct {
 	deleteTimeout      time.Duration
 }
 
-func NewFileMonitor(opts *FileMonitorOpts) (*FileMonitor, error) {
+func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 	if err := opts.OK(); err != nil {
-		return nil, fmt.Errorf("invalid FileMon options: %w", err)
+		return nil, fmt.Errorf("invalid file monitor options: %w", err)
 	}
 
 	watcher, err := fsnotify.NewWatcher()
@@ -48,7 +49,7 @@ func NewFileMonitor(opts *FileMonitorOpts) (*FileMonitor, error) {
 		return nil, fmt.Errorf("failed to initialize fsnotify watcher: %w", err)
 	}
 
-	monitor := &FileMonitor{
+	monitor := &Monitor{
 		Events: make(chan Event),
 
 		rootPath: opts.RootPath,
@@ -64,14 +65,16 @@ func NewFileMonitor(opts *FileMonitorOpts) (*FileMonitor, error) {
 		return nil, err
 	}
 
-	if err := monitor.WatchDirRecursive(opts.RootPath); err != nil {
-		return nil, err
+	if opts.WatchRoot {
+		if err := monitor.WatchDirRecursive(opts.RootPath); err != nil {
+			return nil, err
+		}
 	}
 
 	return monitor, nil
 }
 
-func (f *FileMonitor) WatchDirRecursive(path string) error {
+func (m *Monitor) WatchDirRecursive(path string) error {
 	err := filepath.WalkDir(path, func(walkPath string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -85,7 +88,7 @@ func (f *FileMonitor) WatchDirRecursive(path string) error {
 			return filepath.SkipDir
 		}
 
-		if err := f.watcher.Add(walkPath); err != nil {
+		if err := m.watcher.Add(walkPath); err != nil {
 			return fmt.Errorf("failed to monitor directory %q: %w", walkPath, err)
 		}
 
@@ -95,24 +98,22 @@ func (f *FileMonitor) WatchDirRecursive(path string) error {
 		return fmt.Errorf("failed to set up recursive directory watching for %q: %w", path, err)
 	}
 
-	watched := f.watcher.WatchList()
+	watched := m.watcher.WatchList()
 	slog.Debug("Watch list", "paths", watched)
 
 	return nil
 }
 
-func (f *FileMonitor) WatchFile(path string) error {
-	if err := f.watcher.Add(path); err != nil {
+func (m *Monitor) WatchFile(path string) error {
+	if err := m.watcher.Add(path); err != nil {
 		return fmt.Errorf("failed to monitor file %q: %w", path, err)
 	}
 
 	return nil
 }
 
-func (f *FileMonitor) Run(ctx context.Context) {
-	defer f.Close()
-
-	go f.processPendingDeletes(ctx)
+func (m *Monitor) Run(ctx context.Context) {
+	go m.processPendingDeletes(ctx)
 
 	for {
 		select {
@@ -122,7 +123,7 @@ func (f *FileMonitor) Run(ctx context.Context) {
 			}
 
 			return
-		case event, ok := <-f.watcher.Events:
+		case event, ok := <-m.watcher.Events:
 			if !ok {
 				return
 			}
@@ -132,25 +133,25 @@ func (f *FileMonitor) Run(ctx context.Context) {
 				Op:   event.Op,
 			}
 
-			if f.ignoreEvent(wrapped) {
+			if m.ignoreEvent(wrapped) {
 				continue
 			}
 
 			switch wrapped.Type() {
 			case EventTypeCreate:
-				if err := f.handleCreate(wrapped); err != nil {
+				if err := m.handleCreate(wrapped); err != nil {
 					slog.Error("failed to handle create event", "name", wrapped.Name, "error", err)
 				}
 			case EventTypeRemove, EventTypeRename:
-				if err := f.handleRemoveOrRename(wrapped); err != nil {
+				if err := m.handleRemoveOrRename(wrapped); err != nil {
 					slog.Error("failed to handle remove or rename event", "name", wrapped.Name, "error", err)
 				}
 			case EventTypeWrite, EventTypeChmod, EventTypeUnknown:
 				// TODO: moar?
-				f.Events <- wrapped
+				m.Events <- wrapped
 			}
 
-		case err, ok := <-f.watcher.Errors:
+		case err, ok := <-m.watcher.Errors:
 			if !ok {
 				return
 			}
@@ -160,15 +161,15 @@ func (f *FileMonitor) Run(ctx context.Context) {
 	}
 }
 
-func (f *FileMonitor) Close() {
-	close(f.Events)
+func (m *Monitor) Close() {
+	close(m.Events)
 
-	if err := f.watcher.Close(); err != nil {
+	if err := m.watcher.Close(); err != nil {
 		slog.Error("Failed to shut down fsnotify watcher", "error", err)
 	}
 }
 
-func (f *FileMonitor) ignoreEvent(event Event) bool {
+func (m *Monitor) ignoreEvent(event Event) bool {
 	// TODO
 	// if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
 	// 	slog.Debug("ignoring file event in .git directory")
@@ -199,9 +200,9 @@ func isNumeric(s string) bool {
 	return true
 }
 
-func (f *FileMonitor) populateInitialFiles() error {
+func (m *Monitor) populateInitialFiles() error {
 	// Scan initial files (non-dirs, skip .git)
-	scanErr := filepath.WalkDir(f.rootPath, func(path string, de os.DirEntry, err error) error {
+	scanErr := filepath.WalkDir(m.rootPath, func(path string, de os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -221,7 +222,7 @@ func (f *FileMonitor) populateInitialFiles() error {
 			FileType: FileTypeInitial,
 		}
 
-		if err := f.fileMap.AddFile(path, fi); err != nil {
+		if err := m.fileMap.AddFile(path, fi); err != nil {
 			return fmt.Errorf("failed to add file %q to map: %w", path, err)
 		}
 
@@ -240,7 +241,7 @@ type pendingDelete struct {
 	initialFile bool
 }
 
-func (f *FileMonitor) processPendingDeletes(ctx context.Context) {
+func (m *Monitor) processPendingDeletes(ctx context.Context) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -249,30 +250,30 @@ func (f *FileMonitor) processPendingDeletes(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			f.pendingDeleteMutex.Lock()
+			m.pendingDeleteMutex.Lock()
 
-			for fileName, pd := range f.pendingDeletes {
-				if time.Since(pd.timestamp) > f.deleteTimeout {
-					delete(f.pendingDeletes, fileName)
+			for fileName, pd := range m.pendingDeletes {
+				if time.Since(pd.timestamp) > m.deleteTimeout {
+					delete(m.pendingDeletes, fileName)
 
-					info, err := f.fileMap.Get(fileName)
+					info, err := m.fileMap.Get(fileName)
 					if err != nil {
 						slog.Error("failed to get file for deletion", "name", fileName, "error", err)
 						continue
 					}
 
-					if err := f.fileMap.Delete(fileName); err != nil {
+					if err := m.fileMap.Delete(fileName); err != nil {
 						slog.Error("failed to process pending deletion event", "name", fileName, "error", err)
 						continue
 					}
 
 					slog.Debug("confirmed delete", "name", fileName, "type", info.FileType)
 
-					f.Events <- pd.event
+					m.Events <- pd.event
 				}
 			}
 
-			f.pendingDeleteMutex.Unlock()
+			m.pendingDeleteMutex.Unlock()
 		}
 	}
 }
