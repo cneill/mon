@@ -3,7 +3,6 @@ package git
 import (
 	"log/slog"
 
-	"github.com/cneill/mon/pkg/git"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -29,14 +28,14 @@ func (m *Monitor) Stats(final bool) *Stats {
 	}
 
 	if final {
-		commits, err := git.CommitsSince(m.repo, m.initialHash)
+		commits, err := CommitsSince(m.repo, m.initialHash)
 		if err != nil {
 			slog.Error("failed to collect commits since initial hash", "initial_hash", m.initialHash, "error", err)
 		}
 
 		stats.Commits = commits
 
-		patch, err := git.PatchSince(m.repo, m.initialHash)
+		patch, err := PatchSince(m.repo, m.initialHash)
 		if err != nil {
 			slog.Error("failed to generate patch since initial hash", "initial_hash", m.initialHash, "error", err)
 		}
