@@ -179,22 +179,42 @@ func (s *statusSnapshot) patchString() string {
 		return ""
 	}
 
+	// Borrowed from go-git
+	// https://github.com/go-git/go-git/blob/de8ecc3b52e6a37b24a5a8ca362b54cafed2bc0b/plumbing/object/patch.go#L237-L287
+	maxChangeWidth := 80
+	scaleChangeSize := func(num, total int) int {
+		if num == 0 || total == 0 {
+			return 0
+		}
+
+		return 1 + (num * (maxChangeWidth - 1) / total)
+	}
+
 	stats := s.Patch.Stats()
 
 	builder := &strings.Builder{}
 	builder.WriteString(labelColor.Sprint("\nPatch stats:\n"))
 
 	for _, fileStats := range stats {
-		totalChanges := strconv.FormatInt(int64(fileStats.Addition)+int64(fileStats.Deletion), 10)
+		totalChanges := fileStats.Addition + fileStats.Deletion
+		totalChangesStr := strconv.FormatInt(int64(totalChanges), 10)
 
 		builder.WriteString(indent)
 		builder.WriteString(sublabelColor.Sprint(fileStats.Name))
 		builder.WriteString(separator)
-		builder.WriteString(totalChanges)
+		builder.WriteString(totalChangesStr)
 		builder.WriteRune(' ')
 		// TODO: prevent excessively long stats lines
-		builder.WriteString(addedColor.Sprint(strings.Repeat("+", fileStats.Addition)))
-		builder.WriteString(removedColor.Sprint(strings.Repeat("-", fileStats.Deletion)))
+		adds := fileStats.Addition
+		deletes := fileStats.Deletion
+
+		if totalChanges > maxChangeWidth {
+			adds = scaleChangeSize(adds, totalChanges)
+			deletes = scaleChangeSize(deletes, totalChanges)
+		}
+
+		builder.WriteString(addedColor.Sprint(strings.Repeat("+", adds)))
+		builder.WriteString(removedColor.Sprint(strings.Repeat("-", deletes)))
 		builder.WriteRune('\n')
 	}
 
