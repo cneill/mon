@@ -113,7 +113,7 @@ func (m *Monitor) Run(ctx context.Context) {
 				return
 			}
 
-			switch event.Type() {
+			switch event.Type() { //nolint:exhaustive
 			case files.EventTypeChmod, files.EventTypeWrite:
 				slog.Debug("Updating due to git log update", "event", event)
 

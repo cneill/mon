@@ -33,7 +33,7 @@ func (m *Mon) handleFSEvents(ctx context.Context) {
 				continue
 			}
 
-			switch event.Type() {
+			switch event.Type() { //nolint:exhaustive
 			case files.EventTypeCreate, files.EventTypeRemove, files.EventTypeRename:
 				go m.triggerDisplay()
 			case files.EventTypeWrite:
@@ -52,7 +52,7 @@ func (m *Mon) handleFSEvents(ctx context.Context) {
 				return
 			}
 
-			switch event.Type {
+			switch event.Type { //nolint:exhaustive,gocritic
 			case git.EventTypeNewCommit:
 				m.triggerDisplay()
 			}
@@ -61,11 +61,6 @@ func (m *Mon) handleFSEvents(ctx context.Context) {
 }
 
 func (m *Mon) ignoreEvent(event files.Event) bool {
-	// if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
-	// 	slog.Debug("ignoring file event in .git directory")
-	// 	return true
-	// }
-
 	// Ignore VIM temp files: backups (~, .swp), swap (numeric names)
 	base := filepath.Base(event.Name)
 	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {

@@ -65,8 +65,6 @@ func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, err
 		return nil, fmt.Errorf("failed to get HEAD reference: %w", err)
 	}
 
-	// slog.Debug("checking from HEAD hash", "hash", head.Hash().String())
-
 	// If HEAD is the same as sinceHash, no new commits
 	if head.Hash().String() == sinceHash {
 		return nil, nil
@@ -86,12 +84,9 @@ func CommitsSince(repo *git.Repository, sinceHash string) ([]*object.Commit, err
 	for {
 		commit, err := iter.Next()
 		if err != nil {
-			break // End of iteration or error
+			break
 		}
 
-		// slog.Debug("checked commit", "hash", commit.Hash.String())
-
-		// Stop when we reach the starting point
 		if commit.Hash.String() == sinceHash {
 			break
 		}

@@ -147,7 +147,6 @@ func (m *Monitor) Run(ctx context.Context) {
 					slog.Error("failed to handle remove or rename event", "name", wrapped.Name, "error", err)
 				}
 			case EventTypeWrite, EventTypeChmod, EventTypeUnknown:
-				// TODO: moar?
 				m.Events <- wrapped
 			}
 
@@ -170,12 +169,6 @@ func (m *Monitor) Close() {
 }
 
 func (m *Monitor) ignoreEvent(event Event) bool {
-	// TODO
-	// if strings.Contains(event.Name, ".git/") && event.Name != m.gitLogPath {
-	// 	slog.Debug("ignoring file event in .git directory")
-	// 	return true
-	// }
-
 	// Ignore VIM temp files: backups (~, .swp), swap (numeric names)
 	base := filepath.Base(event.Name)
 	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {

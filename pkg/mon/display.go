@@ -204,7 +204,7 @@ func (s *statusSnapshot) patchString() string {
 		builder.WriteString(separator)
 		builder.WriteString(totalChangesStr)
 		builder.WriteRune(' ')
-		// TODO: prevent excessively long stats lines
+
 		adds := fileStats.Addition
 		deletes := fileStats.Deletion
 
