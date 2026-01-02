@@ -90,7 +90,7 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 		gitFiles:    map[string]struct{}{},
 	}
 
-	if err := monitor.populateInitialFiles(); err != nil {
+	if err := monitor.updateTrackedFiles(); err != nil {
 		return nil, fmt.Errorf("failed to populate initial git files: %w", err)
 	}
 
@@ -118,6 +118,10 @@ func (m *Monitor) Run(ctx context.Context) {
 				slog.Debug("Updating due to git log update", "event", event)
 
 				go m.Update()
+
+				if err := m.updateTrackedFiles(); err != nil {
+					slog.Error("failed to update list of tracked files after git log update")
+				}
 			}
 
 		case event, ok := <-m.FileEvents:
@@ -192,9 +196,11 @@ func (m *Monitor) Close() {
 	m.fileMonitor.Close()
 }
 
-func (m *Monitor) populateInitialFiles() error {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+func (m *Monitor) updateTrackedFiles() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.gitFiles = map[string]struct{}{}
 
 	initialFiles, err := ListFiles(m.repo)
 	if err != nil {
@@ -204,8 +210,6 @@ func (m *Monitor) populateInitialFiles() error {
 	for _, file := range initialFiles {
 		m.gitFiles[file] = struct{}{}
 	}
-
-	slog.Info("INITIAL GIT FILES", "files", m.gitFiles)
 
 	return nil
 }
