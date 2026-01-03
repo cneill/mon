@@ -246,24 +246,26 @@ func (m *Monitor) processPendingDeletes(ctx context.Context) {
 			m.pendingDeleteMutex.Lock()
 
 			for fileName, pd := range m.pendingDeletes {
-				if time.Since(pd.timestamp) > m.deleteTimeout {
-					delete(m.pendingDeletes, fileName)
-
-					info, err := m.fileMap.Get(fileName)
-					if err != nil {
-						slog.Error("failed to get file for deletion", "name", fileName, "error", err)
-						continue
-					}
-
-					if err := m.fileMap.Delete(fileName); err != nil {
-						slog.Error("failed to process pending deletion event", "name", fileName, "error", err)
-						continue
-					}
-
-					slog.Debug("confirmed delete", "name", fileName, "type", info.FileType)
-
-					m.Events <- pd.event
+				if time.Since(pd.timestamp) < m.deleteTimeout {
+					continue
 				}
+
+				delete(m.pendingDeletes, fileName)
+
+				info, err := m.fileMap.Get(fileName)
+				if err != nil {
+					slog.Error("failed to get file for deletion", "name", fileName, "error", err)
+					continue
+				}
+
+				if err := m.fileMap.Delete(fileName); err != nil {
+					slog.Error("failed to process pending deletion event", "name", fileName, "error", err)
+					continue
+				}
+
+				slog.Debug("confirmed delete", "name", fileName, "type", info.FileType)
+
+				m.Events <- pd.event
 			}
 
 			m.pendingDeleteMutex.Unlock()
