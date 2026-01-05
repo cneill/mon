@@ -67,6 +67,8 @@ type statusSnapshot struct {
 	UnstagedChanges string
 	Commits         []*object.Commit
 	Patch           *object.Patch
+
+	LastWrite time.Time
 }
 
 func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
@@ -85,6 +87,8 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 		UnstagedChanges: strconv.FormatInt(gitStats.UnstagedChanges, 10),
 		Commits:         gitStats.Commits,
 		Patch:           gitStats.Patch,
+
+		LastWrite: m.lastWrite,
 	}
 
 	return snapshot
@@ -111,6 +115,12 @@ func (s *statusSnapshot) String() string {
 		builder.WriteString(separator)
 		builder.WriteString(labelColor.Sprint("Unstaged file changes: "))
 		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
+	}
+
+	if since := time.Since(s.LastWrite); since > time.Minute {
+		builder.WriteString(separator)
+		builder.WriteString(labelColor.Sprint("Since last write: "))
+		builder.WriteString(sublabelColor.Sprint(since.String()))
 	}
 
 	return builder.String()

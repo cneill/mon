@@ -39,6 +39,7 @@ type Mon struct {
 	writeLimiter *rate.Limiter
 
 	displayChan chan struct{}
+	lastWrite   time.Time
 }
 
 func New(opts *Opts) (*Mon, error) {
@@ -147,6 +148,7 @@ func (m *Mon) handleFileEvent(event files.Event) {
 	case files.EventTypeCreate, files.EventTypeRemove, files.EventTypeRename:
 		go m.triggerDisplay()
 	case files.EventTypeWrite:
+		m.lastWrite = time.Now()
 		time.Sleep(time.Millisecond * 250) // allow write+delete pairs to settle before checking
 
 		if m.writeLimiter.Allow() {
