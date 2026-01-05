@@ -97,6 +97,15 @@ func (f *FileMap) Delete(name string) error {
 	return nil
 }
 
+func (f *FileMap) Has(name string) bool {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	_, ok := f.files[name]
+
+	return ok
+}
+
 func (f *FileMap) Get(name string) (FileInfo, error) {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()

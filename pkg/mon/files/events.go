@@ -76,7 +76,10 @@ func (m *Monitor) handleCreate(event Event) error {
 	slog.Debug("Added new file", "name", event.Name)
 
 	if fi.IsDir() {
-		if err := m.WatchDirRecursive(event.Name); err != nil {
+		// We want to try to catch e.g. mkdir -p calls that rapidly create nested directories
+		time.Sleep(time.Millisecond * 250)
+
+		if err := m.WatchDirRecursive(event.Name, false); err != nil {
 			return err
 		}
 	}

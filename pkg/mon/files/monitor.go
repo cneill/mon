@@ -66,7 +66,7 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 	}
 
 	if opts.WatchRoot {
-		if err := monitor.WatchDirRecursive(opts.RootPath); err != nil {
+		if err := monitor.WatchDirRecursive(opts.RootPath, true); err != nil {
 			return nil, err
 		}
 	}
@@ -74,7 +74,7 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 	return monitor, nil
 }
 
-func (m *Monitor) WatchDirRecursive(path string) error {
+func (m *Monitor) WatchDirRecursive(path string, initial bool) error {
 	err := filepath.WalkDir(path, func(walkPath string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -90,6 +90,24 @@ func (m *Monitor) WatchDirRecursive(path string) error {
 
 		if err := m.watcher.Add(walkPath); err != nil {
 			return fmt.Errorf("failed to monitor directory %q: %w", walkPath, err)
+		}
+
+		if !m.fileMap.Has(walkPath) && !initial {
+			stat, err := os.Stat(walkPath)
+			if err != nil {
+				slog.Error("failed to stat file while walking to recursively watch", "root_path", path, "walk_path", walkPath, "error", err)
+			}
+
+			info := FileInfo{
+				FileInfo: stat,
+				FileType: FileTypeNew,
+			}
+
+			if err := m.fileMap.AddFile(walkPath, info); err != nil {
+				return fmt.Errorf("failed to watch discovered directory: %w", err)
+			}
+
+			slog.Debug("Added new directory", "path", walkPath)
 		}
 
 		return nil
