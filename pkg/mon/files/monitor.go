@@ -37,6 +37,8 @@ type Monitor struct {
 	pendingDeletes     map[string]pendingDelete // key: name
 	pendingDeleteMutex sync.RWMutex
 	deleteTimeout      time.Duration
+
+	wg sync.WaitGroup
 }
 
 func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
@@ -131,7 +133,14 @@ func (m *Monitor) WatchFile(path string) error {
 }
 
 func (m *Monitor) Run(ctx context.Context) {
-	go m.processPendingDeletes(ctx)
+	m.wg.Add(2)
+
+	go func() {
+		defer m.wg.Done()
+		m.processPendingDeletes(ctx)
+	}()
+
+	defer m.wg.Done()
 
 	for {
 		select {
@@ -168,11 +177,12 @@ func (m *Monitor) Run(ctx context.Context) {
 }
 
 func (m *Monitor) Close() {
-	close(m.Events)
-
 	if err := m.watcher.Close(); err != nil {
 		slog.Error("Failed to shut down fsnotify watcher", "error", err)
 	}
+
+	m.wg.Wait()
+	close(m.Events)
 }
 
 func (m *Monitor) handleEvent(event Event) {
