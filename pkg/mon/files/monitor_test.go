@@ -117,9 +117,7 @@ func TestMonitor_DeletingFiles(t *testing.T) {
 	}
 }
 
-// TODO: Find a watcher library that will handle recursive watches - currently, `mkdir -p` equivalents will fail because
-// the request to watch the newly created directory happens too slowly to catch the nested dirs created underneath it
-func TestMonitor_NewDir(t *testing.T) {
+func TestMonitor_NewDir(t *testing.T) { //nolint:cyclop,funlen // not worth breaking this up
 	t.Parallel()
 
 	tempDir := t.TempDir()

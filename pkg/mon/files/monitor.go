@@ -146,27 +146,16 @@ func (m *Monitor) Run(ctx context.Context) {
 				return
 			}
 
+			if m.ignoreEvent(event) {
+				continue
+			}
+
 			wrapped := Event{
 				Name: event.Name,
 				Op:   event.Op,
 			}
 
-			if m.ignoreEvent(wrapped) {
-				continue
-			}
-
-			switch wrapped.Type() {
-			case EventTypeCreate:
-				if err := m.handleCreate(wrapped); err != nil {
-					slog.Error("failed to handle create event", "name", wrapped.Name, "error", err)
-				}
-			case EventTypeRemove, EventTypeRename:
-				if err := m.handleRemoveOrRename(wrapped); err != nil {
-					slog.Error("failed to handle remove or rename event", "name", wrapped.Name, "error", err)
-				}
-			case EventTypeWrite, EventTypeChmod, EventTypeUnknown:
-				m.Events <- wrapped
-			}
+			m.handleEvent(wrapped)
 
 		case err, ok := <-m.watcher.Errors:
 			if !ok {
@@ -186,7 +175,22 @@ func (m *Monitor) Close() {
 	}
 }
 
-func (m *Monitor) ignoreEvent(event Event) bool {
+func (m *Monitor) handleEvent(event Event) {
+	switch event.Type() {
+	case EventTypeCreate:
+		if err := m.handleCreate(event); err != nil {
+			slog.Error("failed to handle create event", "name", event.Name, "error", err)
+		}
+	case EventTypeRemove, EventTypeRename:
+		if err := m.handleRemoveOrRename(event); err != nil {
+			slog.Error("failed to handle remove or rename event", "name", event.Name, "error", err)
+		}
+	case EventTypeWrite, EventTypeChmod, EventTypeUnknown:
+		m.Events <- event
+	}
+}
+
+func (m *Monitor) ignoreEvent(event fsnotify.Event) bool {
 	// Ignore VIM temp files: backups (~, .swp), swap (numeric names)
 	base := filepath.Base(event.Name)
 	if strings.HasSuffix(base, "~") || strings.HasSuffix(base, ".swp") || isNumeric(base) {

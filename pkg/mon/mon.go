@@ -3,9 +3,11 @@ package mon
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/cneill/mon/pkg/mon/files"
 	"github.com/cneill/mon/pkg/mon/git"
@@ -76,7 +78,13 @@ func New(opts *Opts) (*Mon, error) {
 }
 
 func (m *Mon) Run(ctx context.Context) error {
-	go m.handleFSEvents(ctx)
+	go m.fileMonitor.Run(ctx)
+	defer m.fileMonitor.Close()
+
+	go m.gitMonitor.Run(ctx)
+	defer m.gitMonitor.Close()
+
+	go m.handleEvents(ctx)
 
 	go m.displayLoop()
 
@@ -84,7 +92,12 @@ func (m *Mon) Run(ctx context.Context) error {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
+
+	select {
+	case <-sigChan:
+	case <-ctx.Done():
+		slog.Debug("Context cancelled")
+	}
 
 	snapshot := m.getStatusSnapshot(true)
 	fmt.Println(clearLine + snapshot.Final())
@@ -93,4 +106,46 @@ func (m *Mon) Run(ctx context.Context) error {
 }
 
 func (m *Mon) Teardown() {
+}
+
+func (m *Mon) handleEvents(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case event, ok := <-m.fileMonitor.Events:
+			if !ok {
+				slog.Info("file monitor shut down")
+				return
+			}
+
+			m.handleFileEvent(event)
+
+		case event, ok := <-m.gitMonitor.GitEvents:
+			if !ok {
+				slog.Info("git monitor shut down")
+				return
+			}
+
+			if event.Type == git.EventTypeNewCommit {
+				m.triggerDisplay()
+			}
+		}
+	}
+}
+
+func (m *Mon) handleFileEvent(event files.Event) {
+	switch event.Type() { //nolint:exhaustive
+	case files.EventTypeCreate, files.EventTypeRemove, files.EventTypeRename:
+		go m.triggerDisplay()
+	case files.EventTypeWrite:
+		time.Sleep(time.Millisecond * 250) // allow write+delete pairs to settle before checking
+
+		if m.writeLimiter.Allow() {
+			m.writeLimiter.Reserve()
+
+			m.gitMonitor.FileEvents <- event
+		}
+	}
 }
