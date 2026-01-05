@@ -137,6 +137,7 @@ func (m *Monitor) Run(ctx context.Context) {
 
 	go func() {
 		defer m.wg.Done()
+
 		m.processPendingDeletes(ctx)
 	}()
 

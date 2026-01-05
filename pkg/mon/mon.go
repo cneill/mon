@@ -89,7 +89,7 @@ func (m *Mon) Run(ctx context.Context) error {
 
 	go m.handleEvents(ctx)
 
-	go m.displayLoop()
+	go m.displayLoop(ctx)
 
 	m.triggerDisplay()
 
@@ -98,9 +98,12 @@ func (m *Mon) Run(ctx context.Context) error {
 
 	select {
 	case <-sigChan:
+		slog.Debug("Got SIGINT/SIGTERM")
 	case <-ctx.Done():
 		slog.Debug("Context cancelled")
 	}
+
+	cancel() // Cancel context first so goroutines can exit before Close() waits on them
 
 	snapshot := m.getStatusSnapshot(true)
 	fmt.Println(clearLine + snapshot.Final())
@@ -109,6 +112,7 @@ func (m *Mon) Run(ctx context.Context) error {
 }
 
 func (m *Mon) Teardown() {
+	close(m.displayChan)
 }
 
 func (m *Mon) handleEvents(ctx context.Context) {

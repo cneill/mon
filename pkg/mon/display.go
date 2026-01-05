@@ -1,6 +1,7 @@
 package mon
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"slices"
@@ -25,13 +26,18 @@ var (
 	indent         = "  "
 )
 
-func (m *Mon) displayLoop() {
+func (m *Mon) displayLoop(ctx context.Context) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-m.displayChan:
+		case <-ctx.Done():
+			return
+		case _, ok := <-m.displayChan:
+			if !ok {
+				return
+			}
 		case <-ticker.C:
 		}
 
