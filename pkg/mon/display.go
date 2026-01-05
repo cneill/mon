@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -175,8 +174,6 @@ func (s *statusSnapshot) filesString() string {
 	if len(s.NewFiles) > 0 {
 		builder.WriteString(labelColor.Sprint("\nNew files:\n"))
 
-		slices.Sort(s.NewFiles)
-
 		for _, file := range s.NewFiles {
 			builder.WriteString(indent + "- " + sublabelColor.Sprint(file) + "\n")
 		}
@@ -184,8 +181,6 @@ func (s *statusSnapshot) filesString() string {
 
 	if len(s.DeletedFiles) > 0 {
 		builder.WriteString(labelColor.Sprint("\nDeleted files:\n"))
-
-		slices.Sort(s.DeletedFiles)
 
 		for _, file := range s.DeletedFiles {
 			builder.WriteString(indent + "- " + sublabelColor.Sprint(file) + "\n")
