@@ -192,6 +192,7 @@ func (m *Monitor) Update() {
 }
 
 func (m *Monitor) Close() {
+	close(m.FileEvents)
 	close(m.GitEvents)
 	m.fileMonitor.Close()
 }

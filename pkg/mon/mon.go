@@ -78,6 +78,9 @@ func New(opts *Opts) (*Mon, error) {
 }
 
 func (m *Mon) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	go m.fileMonitor.Run(ctx)
 	defer m.fileMonitor.Close()
 
