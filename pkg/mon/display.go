@@ -119,7 +119,7 @@ func (s *statusSnapshot) String() string {
 	if since := time.Since(s.LastWrite); since > time.Minute {
 		builder.WriteString(separator)
 		builder.WriteString(labelColor.Sprint("Since last write: "))
-		builder.WriteString(sublabelColor.Sprint(since.String()))
+		builder.WriteString(sublabelColor.Sprint(durationString(since)))
 	}
 
 	return builder.String()
@@ -261,4 +261,20 @@ func (s *statusSnapshot) commitsString() string {
 	}
 
 	return builder.String()
+}
+
+func durationString(duration time.Duration) string {
+	result := ""
+	hours := int64(duration / time.Hour)
+	minutes := int64(duration / time.Minute)
+
+	if hours > 0 {
+		result += strconv.FormatInt(hours, 10) + "h"
+	}
+
+	if minutes > 0 {
+		result += strconv.FormatInt(minutes, 10) + "m"
+	}
+
+	return result
 }
