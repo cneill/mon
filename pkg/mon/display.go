@@ -257,7 +257,7 @@ func (s *statusSnapshot) commitsString() string {
 		builder.WriteString(indent)
 		builder.WriteString(sublabelColor.Sprint(commit.ID().String()))
 		builder.WriteString(separator)
-		builder.WriteString(detailColor.Sprint(commit.Committer.When.String()))
+		builder.WriteString(detailColor.Sprint(commit.Committer.When.Format(time.RFC3339)))
 		builder.WriteString(separator)
 		builder.WriteString(msg)
 		builder.WriteRune('\n')
