@@ -22,6 +22,7 @@ var (
 	removedColor   = color.RGB(255, 0, 0)
 	separatorColor = color.RGB(50, 50, 50).Add(color.Bold)
 	separator      = separatorColor.Sprint(" :: ")
+	detailColor    = color.RGB(26, 178, 255)
 	indent         = "  "
 )
 
@@ -255,6 +256,8 @@ func (s *statusSnapshot) commitsString() string {
 
 		builder.WriteString(indent)
 		builder.WriteString(sublabelColor.Sprint(commit.ID().String()))
+		builder.WriteString(separator)
+		builder.WriteString(detailColor.Sprint(commit.Committer.When.String()))
 		builder.WriteString(separator)
 		builder.WriteString(msg)
 		builder.WriteRune('\n')
