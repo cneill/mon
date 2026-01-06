@@ -281,36 +281,54 @@ func (m *Monitor) processPendingDeletes(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			m.pendingDeleteMutex.Lock()
+			m.processExpiredDeletes(ctx)
+		}
+	}
+}
 
-			for fileName, pd := range m.pendingDeletes {
-				if time.Since(pd.timestamp) < m.deleteTimeout {
-					continue
-				}
+func (m *Monitor) processExpiredDeletes(ctx context.Context) {
+	// Collect expired deletes while holding the lock briefly
+	m.pendingDeleteMutex.Lock()
 
-				delete(m.pendingDeletes, fileName)
+	var expired []pendingDelete
 
-				info, err := m.fileMap.Get(fileName)
-				if err != nil {
-					slog.Error("failed to get file for deletion", "name", fileName, "error", err)
-					continue
-				}
+	for fileName, pd := range m.pendingDeletes {
+		if time.Since(pd.timestamp) < m.deleteTimeout {
+			continue
+		}
 
-				if err := m.fileMap.Delete(fileName); err != nil {
-					slog.Error("failed to process pending deletion event", "name", fileName, "error", err)
-					continue
-				}
+		delete(m.pendingDeletes, fileName)
 
-				slog.Debug("confirmed delete", "name", fileName, "type", info.FileType)
+		// Check if file still exists - if so, this was an editor swap, not a real delete
+		if _, err := os.Stat(fileName); err == nil {
+			slog.Debug("ignoring delete for file that still exists (likely editor swap)", "name", fileName)
+			continue
+		}
 
-				select {
-				case <-ctx.Done():
-					return
-				case m.Events <- pd.event:
-				}
-			}
+		info, err := m.fileMap.Get(fileName)
+		if err != nil {
+			slog.Error("failed to get file for deletion", "name", fileName, "error", err)
+			continue
+		}
 
-			m.pendingDeleteMutex.Unlock()
+		if err := m.fileMap.Delete(fileName); err != nil {
+			slog.Error("failed to process pending deletion event", "name", fileName, "error", err)
+			continue
+		}
+
+		slog.Debug("confirmed delete", "name", fileName, "type", info.FileType)
+
+		expired = append(expired, pd)
+	}
+
+	m.pendingDeleteMutex.Unlock()
+
+	// Send events without holding the lock
+	for _, pd := range expired {
+		select {
+		case <-ctx.Done():
+			return
+		case m.Events <- pd.event:
 		}
 	}
 }

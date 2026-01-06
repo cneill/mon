@@ -94,7 +94,7 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 		return nil, fmt.Errorf("failed to populate initial git files: %w", err)
 	}
 
-	go monitor.Update()
+	go monitor.Update(context.Background())
 
 	return monitor, nil
 }
@@ -117,7 +117,7 @@ func (m *Monitor) Run(ctx context.Context) {
 			case files.EventTypeChmod, files.EventTypeWrite:
 				slog.Debug("Updating due to git log update", "event", event)
 
-				go m.Update()
+				go m.Update(ctx)
 
 				if err := m.updateTrackedFiles(); err != nil {
 					slog.Error("failed to update list of tracked files after git log update")
@@ -141,15 +141,12 @@ func (m *Monitor) Run(ctx context.Context) {
 
 			slog.Debug("Updating due to file event", "event", event)
 
-			go m.Update()
+			go m.Update(ctx)
 		}
 	}
 }
 
-func (m *Monitor) Update() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
+func (m *Monitor) Update(ctx context.Context) {
 	slog.Debug("Processing git change")
 
 	commits, err := CommitsSince(m.repo, m.initialHash)
@@ -158,7 +155,9 @@ func (m *Monitor) Update() {
 		return
 	}
 
+	m.mutex.Lock()
 	m.numCommits = int64(len(commits))
+	m.mutex.Unlock()
 
 	newHash, err := GetHEADSHA(m.repo)
 	if err != nil {
@@ -186,13 +185,19 @@ func (m *Monitor) Update() {
 
 	m.lastProcessedHash = newHash
 
-	m.GitEvents <- Event{
+	event := Event{
 		Type: EventTypeNewCommit,
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	case m.GitEvents <- event:
 	}
 }
 
 func (m *Monitor) Close() {
-	close(m.FileEvents)
+	// close(m.FileEvents)
 	close(m.GitEvents)
 	m.fileMonitor.Close()
 }

@@ -45,16 +45,14 @@ func (e Event) Type() EventType {
 }
 
 func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
-	m.pendingDeleteMutex.Lock()
-
 	if _, ok := m.pendingDeletes[event.Name]; ok {
+		m.pendingDeleteMutex.Lock()
 		delete(m.pendingDeletes, event.Name)
+		m.pendingDeleteMutex.Unlock()
 		slog.Debug("ignored delete+create pair", "name", event.Name)
 
 		return nil
 	}
-
-	m.pendingDeleteMutex.Unlock()
 
 	if _, err := m.fileMap.Get(event.Name); !errors.Is(err, ErrUnknownFile) {
 		return fmt.Errorf("creation request for file %q that already exists", event.Name)

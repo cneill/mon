@@ -63,7 +63,7 @@ func New(opts *Opts) (*Mon, error) {
 	}
 
 	// Get initial unstaged changes count
-	gitMonitor.Update()
+	gitMonitor.Update(context.Background())
 
 	mon := &Mon{
 		Opts: opts,
@@ -128,7 +128,7 @@ func (m *Mon) handleEvents(ctx context.Context) {
 				return
 			}
 
-			m.handleFileEvent(event)
+			m.handleFileEvent(ctx, event)
 
 		case event, ok := <-m.gitMonitor.GitEvents:
 			if !ok {
@@ -143,7 +143,7 @@ func (m *Mon) handleEvents(ctx context.Context) {
 	}
 }
 
-func (m *Mon) handleFileEvent(event files.Event) {
+func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 	switch event.Type() { //nolint:exhaustive
 	case files.EventTypeCreate, files.EventTypeRemove, files.EventTypeRename:
 		go m.triggerDisplay()
@@ -155,7 +155,11 @@ func (m *Mon) handleFileEvent(event files.Event) {
 		if m.writeLimiter.Allow() {
 			m.writeLimiter.Reserve()
 
-			m.gitMonitor.FileEvents <- event
+			select {
+			case <-ctx.Done():
+				return
+			case m.gitMonitor.FileEvents <- event:
+			}
 		}
 	}
 }
