@@ -112,13 +112,13 @@ func (s *statusSnapshot) String() string {
 
 	if s.UnstagedChanges != "0" {
 		builder.WriteString(separator)
-		builder.WriteString(labelColor.Sprint("Unstaged file changes: "))
+		builder.WriteString(labelColor.Sprint("Unstaged files: "))
 		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
 	}
 
 	if since := time.Since(s.LastWrite); since > time.Minute {
 		builder.WriteString(separator)
-		builder.WriteString(labelColor.Sprint("Since last write: "))
+		builder.WriteString(labelColor.Sprint("Last write: "))
 		builder.WriteString(sublabelColor.Sprint(durationString(since)))
 	}
 
