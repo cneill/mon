@@ -27,8 +27,6 @@ func TestMonitor_CreatingFiles(t *testing.T) {
 		t.Fatalf("failed to start file monitor: %v", err)
 	}
 
-	defer monitor.Close()
-
 	// Drain events
 	go func() {
 		for range monitor.Events {
@@ -36,7 +34,11 @@ func TestMonitor_CreatingFiles(t *testing.T) {
 		}
 	}()
 
-	go monitor.Run(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+
+	go monitor.Run(ctx)
+
+	time.Sleep(time.Millisecond * 50)
 
 	for fileNum := range numToCreate {
 		fileName := filepath.Join(tempDir, fmt.Sprintf("temp_file_%d.txt", fileNum))
@@ -45,8 +47,10 @@ func TestMonitor_CreatingFiles(t *testing.T) {
 		}
 	}
 
-	// Need to wait for all events to be read...?
-	time.Sleep(time.Millisecond * 10)
+	time.Sleep(time.Millisecond * 100)
+	cancel()
+
+	monitor.Close()
 
 	stats := monitor.Stats(true)
 
@@ -85,8 +89,6 @@ func TestMonitor_DeletingFiles(t *testing.T) {
 		t.Fatalf("failed to start file monitor: %v", err)
 	}
 
-	defer monitor.Close()
-
 	// Drain events
 	go func() {
 		for range monitor.Events {
@@ -94,7 +96,10 @@ func TestMonitor_DeletingFiles(t *testing.T) {
 		}
 	}()
 
-	go monitor.Run(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+	go monitor.Run(ctx)
+
+	time.Sleep(time.Millisecond * 100)
 
 	for _, fileName := range toDelete {
 		if err := os.Remove(fileName); err != nil {
@@ -104,6 +109,9 @@ func TestMonitor_DeletingFiles(t *testing.T) {
 
 	// Allow pending deletes to settle
 	time.Sleep(time.Millisecond * 500)
+
+	cancel()
+	monitor.Close()
 
 	stats := monitor.Stats(true)
 	numToDelete := int64(len(toDelete))
@@ -130,8 +138,6 @@ func TestMonitor_NewDir(t *testing.T) { //nolint:cyclop,funlen // not worth brea
 		t.Fatalf("failed to start file monitor: %v", err)
 	}
 
-	defer monitor.Close()
-
 	testFile := filepath.Join(tempDir, "test_file.txt")
 	nestedDir := filepath.Join(tempDir, "path", "to", "new", "dir")
 	nestedTestFile := filepath.Join(nestedDir, "nested_test_file.txt")
@@ -143,7 +149,11 @@ func TestMonitor_NewDir(t *testing.T) { //nolint:cyclop,funlen // not worth brea
 		}
 	}()
 
-	go monitor.Run(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+
+	go monitor.Run(ctx)
+
+	time.Sleep(time.Millisecond * 100)
 
 	if _, err := os.Create(testFile); err != nil {
 		t.Fatalf("failed to create test file %q: %v", testFile, err)
@@ -186,6 +196,9 @@ func TestMonitor_NewDir(t *testing.T) { //nolint:cyclop,funlen // not worth brea
 
 	// Make sure we process the delete event...
 	time.Sleep(time.Millisecond * 500)
+
+	cancel()
+	monitor.Close()
 
 	stats = monitor.Stats(true)
 

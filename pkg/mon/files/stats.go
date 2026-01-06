@@ -11,8 +11,8 @@ type Stats struct {
 
 func (m *Monitor) Stats(final bool) *Stats {
 	stats := &Stats{
-		NumFilesCreated: m.fileMap.filesCreated,
-		NumFilesDeleted: m.fileMap.filesDeleted,
+		NumFilesCreated: m.fileMap.FilesCreated(),
+		NumFilesDeleted: m.fileMap.FilesDeleted(),
 	}
 
 	if final {

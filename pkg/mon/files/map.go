@@ -147,3 +147,15 @@ func (f *FileMap) DeletedFiles() []string {
 
 	return results
 }
+
+func (f *FileMap) FilesCreated() int64 {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+	return f.filesCreated
+}
+
+func (f *FileMap) FilesDeleted() int64 {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+	return f.filesDeleted
+}

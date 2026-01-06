@@ -29,7 +29,7 @@ func (m *MonitorOpts) OK() error {
 type Monitor struct {
 	Events chan Event
 
-	rootPath string
+	opts *MonitorOpts
 
 	watcher *fsnotify.Watcher
 	fileMap *FileMap
@@ -54,7 +54,7 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 	monitor := &Monitor{
 		Events: make(chan Event),
 
-		rootPath: opts.RootPath,
+		opts: opts,
 
 		watcher: watcher,
 		fileMap: NewFileMap(),
@@ -65,12 +65,6 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 
 	if err := monitor.populateInitialFiles(); err != nil {
 		return nil, err
-	}
-
-	if opts.WatchRoot {
-		if err := monitor.WatchDirRecursive(opts.RootPath, true); err != nil {
-			return nil, err
-		}
 	}
 
 	return monitor, nil
@@ -133,11 +127,17 @@ func (m *Monitor) WatchFile(path string) error {
 }
 
 func (m *Monitor) Run(ctx context.Context) {
+	if m.opts.WatchRoot {
+		if err := m.WatchDirRecursive(m.opts.RootPath, true); err != nil {
+			slog.Error("failed to watch root directory", "error", err)
+			return
+		}
+	}
+
 	m.wg.Add(2)
 
 	go func() {
 		defer m.wg.Done()
-
 		m.processPendingDeletes(ctx)
 	}()
 
@@ -165,7 +165,7 @@ func (m *Monitor) Run(ctx context.Context) {
 				Op:   event.Op,
 			}
 
-			m.handleEvent(wrapped)
+			m.handleEvent(ctx, wrapped)
 
 		case err, ok := <-m.watcher.Errors:
 			if !ok {
@@ -186,18 +186,22 @@ func (m *Monitor) Close() {
 	close(m.Events)
 }
 
-func (m *Monitor) handleEvent(event Event) {
+func (m *Monitor) handleEvent(ctx context.Context, event Event) {
 	switch event.Type() {
 	case EventTypeCreate:
-		if err := m.handleCreate(event); err != nil {
+		if err := m.handleCreate(ctx, event); err != nil {
 			slog.Error("failed to handle create event", "name", event.Name, "error", err)
 		}
 	case EventTypeRemove, EventTypeRename:
-		if err := m.handleRemoveOrRename(event); err != nil {
+		if err := m.handleRemoveOrRename(ctx, event); err != nil {
 			slog.Error("failed to handle remove or rename event", "name", event.Name, "error", err)
 		}
 	case EventTypeWrite, EventTypeChmod, EventTypeUnknown:
-		m.Events <- event
+		select {
+		case <-ctx.Done():
+			return
+		case m.Events <- event:
+		}
 	}
 }
 
@@ -228,7 +232,7 @@ func isNumeric(s string) bool {
 
 func (m *Monitor) populateInitialFiles() error {
 	// Scan initial files (non-dirs, skip .git)
-	scanErr := filepath.WalkDir(m.rootPath, func(path string, de os.DirEntry, err error) error {
+	err := filepath.WalkDir(m.opts.RootPath, func(path string, de os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -254,8 +258,8 @@ func (m *Monitor) populateInitialFiles() error {
 
 		return nil
 	})
-	if scanErr != nil {
-		return fmt.Errorf("failed to scan initial files: %w", scanErr)
+	if err != nil {
+		return fmt.Errorf("failed to scan initial files: %w", err)
 	}
 
 	return nil
@@ -298,7 +302,11 @@ func (m *Monitor) processPendingDeletes(ctx context.Context) {
 
 				slog.Debug("confirmed delete", "name", fileName, "type", info.FileType)
 
-				m.Events <- pd.event
+				select {
+				case <-ctx.Done():
+					return
+				case m.Events <- pd.event:
+				}
 			}
 
 			m.pendingDeleteMutex.Unlock()

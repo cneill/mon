@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -43,7 +44,7 @@ func (e Event) Type() EventType {
 	return EventTypeUnknown
 }
 
-func (m *Monitor) handleCreate(event Event) error {
+func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
 	m.pendingDeleteMutex.Lock()
 
 	if _, ok := m.pendingDeletes[event.Name]; ok {
@@ -84,12 +85,17 @@ func (m *Monitor) handleCreate(event Event) error {
 		}
 	}
 
-	m.Events <- event
+	select {
+	case <-ctx.Done():
+		return nil
+		// return fmt.Errorf("context cancelled")
+	case m.Events <- event:
+	}
 
 	return nil
 }
 
-func (m *Monitor) handleRemoveOrRename(event Event) error {
+func (m *Monitor) handleRemoveOrRename(ctx context.Context, event Event) error {
 	file, err := m.fileMap.Get(event.Name)
 	if err != nil {
 		return fmt.Errorf("got remove/rename event for unknown file %q", event.Name)
