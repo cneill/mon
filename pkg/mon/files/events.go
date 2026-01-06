@@ -95,7 +95,7 @@ func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
 	return nil
 }
 
-func (m *Monitor) handleRemoveOrRename(ctx context.Context, event Event) error {
+func (m *Monitor) handleRemoveOrRename(_ context.Context, event Event) error {
 	file, err := m.fileMap.Get(event.Name)
 	if err != nil {
 		return fmt.Errorf("got remove/rename event for unknown file %q", event.Name)

@@ -126,7 +126,7 @@ func (m *Monitor) WatchFile(path string) error {
 	return nil
 }
 
-func (m *Monitor) Run(ctx context.Context) {
+func (m *Monitor) Run(ctx context.Context) { //nolint:cyclop
 	if m.opts.WatchRoot {
 		if err := m.WatchDirRecursive(m.opts.RootPath, true); err != nil {
 			slog.Error("failed to watch root directory", "error", err)
@@ -138,6 +138,7 @@ func (m *Monitor) Run(ctx context.Context) {
 
 	go func() {
 		defer m.wg.Done()
+
 		m.processPendingDeletes(ctx)
 	}()
 

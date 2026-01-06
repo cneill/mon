@@ -149,6 +149,7 @@ func (m *Mon) handleFileEvent(event files.Event) {
 		go m.triggerDisplay()
 	case files.EventTypeWrite:
 		m.lastWrite = time.Now()
+
 		time.Sleep(time.Millisecond * 250) // allow write+delete pairs to settle before checking
 
 		if m.writeLimiter.Allow() {
