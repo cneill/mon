@@ -218,3 +218,215 @@ func TestMonitor_NewDir(t *testing.T) { //nolint:cyclop,funlen // not worth brea
 		t.Errorf("file %q was not present in NewFiles after delete", nestedTestFile)
 	}
 }
+
+func TestMonitor_EditorSwapIgnored(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+
+	// Create an initial file that will be "edited" by our simulated editor
+	testFile := filepath.Join(tempDir, "document.txt")
+	if err := os.WriteFile(testFile, []byte("initial content"), 0o644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	monitor, err := files.NewMonitor(&files.MonitorOpts{
+		RootPath:  tempDir,
+		WatchRoot: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to start file monitor: %v", err)
+	}
+
+	// Drain events
+	go func() {
+		for range monitor.Events {
+			continue
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	go monitor.Run(ctx)
+
+	// Let the monitor start up
+	time.Sleep(time.Millisecond * 100)
+
+	// Simulate editor swap pattern (like vim or vscode):
+	// 1. Write new content to a temp file
+	// 2. Delete the original file
+	// 3. Rename temp file to original name
+	swapFile := filepath.Join(tempDir, "document.txt.swp")
+
+	if err := os.WriteFile(swapFile, []byte("updated content"), 0o644); err != nil {
+		t.Fatalf("failed to create swap file: %v", err)
+	}
+
+	if err := os.Remove(testFile); err != nil {
+		t.Fatalf("failed to remove original file: %v", err)
+	}
+
+	if err := os.Rename(swapFile, testFile); err != nil {
+		t.Fatalf("failed to rename swap file to original: %v", err)
+	}
+
+	// Wait for pending deletes to be processed (deleteTimeout is 250ms, check interval is 100ms)
+	time.Sleep(time.Millisecond * 500)
+
+	cancel()
+	monitor.Close()
+
+	stats := monitor.Stats(true)
+
+	// The original file should NOT be counted as deleted since it still exists
+	if stats.NumFilesDeleted != 0 {
+		t.Errorf("expected NumFilesDeleted == 0 (editor swap should be ignored), got %d", stats.NumFilesDeleted)
+	}
+
+	if len(stats.DeletedFiles) != 0 {
+		t.Errorf("expected DeletedFiles to be empty, got %v", stats.DeletedFiles)
+	}
+}
+
+func TestMonitor_EditorSwapMultipleEdits(t *testing.T) { //nolint:cyclop
+	t.Parallel()
+
+	tempDir := t.TempDir()
+
+	// Create initial files
+	file1 := filepath.Join(tempDir, "file1.txt")
+	file2 := filepath.Join(tempDir, "file2.txt")
+
+	for _, f := range []string{file1, file2} {
+		if err := os.WriteFile(f, []byte("initial"), 0o644); err != nil {
+			t.Fatalf("failed to create test file %q: %v", f, err)
+		}
+	}
+
+	monitor, err := files.NewMonitor(&files.MonitorOpts{
+		RootPath:  tempDir,
+		WatchRoot: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to start file monitor: %v", err)
+	}
+
+	go func() {
+		for range monitor.Events {
+			continue
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	go monitor.Run(ctx)
+
+	time.Sleep(time.Millisecond * 100)
+
+	// Simulate multiple rapid editor saves on both files
+	for i := range 5 {
+		for _, testFile := range []string{file1, file2} {
+			swapFile := testFile + ".swp"
+
+			if err := os.WriteFile(swapFile, fmt.Appendf([]byte{}, "content %d", i), 0o644); err != nil {
+				t.Fatalf("failed to create swap file: %v", err)
+			}
+
+			if err := os.Remove(testFile); err != nil {
+				t.Fatalf("failed to remove original file: %v", err)
+			}
+
+			if err := os.Rename(swapFile, testFile); err != nil {
+				t.Fatalf("failed to rename swap file: %v", err)
+			}
+		}
+
+		// Small delay between edits
+		time.Sleep(time.Millisecond * 50)
+	}
+
+	// Wait for all pending deletes to be processed
+	time.Sleep(time.Millisecond * 500)
+
+	cancel()
+	monitor.Close()
+
+	stats := monitor.Stats(true)
+
+	if stats.NumFilesDeleted != 0 {
+		t.Errorf("expected NumFilesDeleted == 0 after multiple editor swaps, got %d", stats.NumFilesDeleted)
+	}
+
+	if stats.NumFilesCreated != 0 {
+		t.Errorf("expected NumFilesCreated == 0 (swap files should be ignored), got %d", stats.NumFilesCreated)
+	}
+}
+
+func TestMonitor_RealDeleteStillCounted(t *testing.T) { //nolint:cyclop
+	t.Parallel()
+
+	tempDir := t.TempDir()
+
+	// Create files - some will be swapped, one will be really deleted
+	keepFile := filepath.Join(tempDir, "keep.txt")
+	deleteFile := filepath.Join(tempDir, "delete.txt")
+
+	for _, f := range []string{keepFile, deleteFile} {
+		if err := os.WriteFile(f, []byte("content"), 0o644); err != nil {
+			t.Fatalf("failed to create test file %q: %v", f, err)
+		}
+	}
+
+	monitor, err := files.NewMonitor(&files.MonitorOpts{
+		RootPath:  tempDir,
+		WatchRoot: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to start file monitor: %v", err)
+	}
+
+	go func() {
+		for range monitor.Events {
+			continue
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	go monitor.Run(ctx)
+
+	time.Sleep(time.Millisecond * 100)
+
+	// Simulate editor swap on keepFile
+	swapFile := keepFile + ".swp"
+	if err := os.WriteFile(swapFile, []byte("new content"), 0o644); err != nil {
+		t.Fatalf("failed to create swap file: %v", err)
+	}
+
+	if err := os.Remove(keepFile); err != nil {
+		t.Fatalf("failed to remove keepFile: %v", err)
+	}
+
+	if err := os.Rename(swapFile, keepFile); err != nil {
+		t.Fatalf("failed to rename swap file: %v", err)
+	}
+
+	// Really delete deleteFile
+	if err := os.Remove(deleteFile); err != nil {
+		t.Fatalf("failed to remove deleteFile: %v", err)
+	}
+
+	// Wait for pending deletes to process
+	time.Sleep(time.Millisecond * 500)
+
+	cancel()
+	monitor.Close()
+
+	stats := monitor.Stats(true)
+
+	// Only the real delete should be counted
+	if stats.NumFilesDeleted != 1 {
+		t.Errorf("expected NumFilesDeleted == 1, got %d", stats.NumFilesDeleted)
+	}
+
+	if len(stats.DeletedFiles) != 1 || stats.DeletedFiles[0] != deleteFile {
+		t.Errorf("expected DeletedFiles to contain only %q, got %v", deleteFile, stats.DeletedFiles)
+	}
+}
