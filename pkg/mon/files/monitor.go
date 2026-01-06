@@ -290,7 +290,7 @@ func (m *Monitor) processExpiredDeletes(ctx context.Context) {
 	// Collect expired deletes while holding the lock briefly
 	m.pendingDeleteMutex.Lock()
 
-	var expired []pendingDelete
+	expired := make([]pendingDelete, 0, len(m.pendingDeletes))
 
 	for fileName, pd := range m.pendingDeletes {
 		if time.Since(pd.timestamp) < m.deleteTimeout {

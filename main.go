@@ -55,7 +55,7 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		ProjectDir: projectDir,
 	}
 
-	mon, err := mon.New(opts)
+	mon, err := mon.New(opts) //nolint:contextcheck
 	if err != nil {
 		return fmt.Errorf("failed to set up mon: %w", err)
 	}
