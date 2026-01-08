@@ -85,7 +85,9 @@ func New(opts *Opts) (*Mon, error) {
 		listeners: map[string]listener.Listener{},
 	}
 
-	mon.setupListeners()
+	if err := mon.setupListeners(); err != nil {
+		return nil, fmt.Errorf("failed to set up listeners: %w", err)
+	}
 
 	return mon, nil
 }
@@ -212,11 +214,14 @@ func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 					continue
 				}
 
-				list.LogEvent(listener.Event{
+				logErr := list.LogEvent(listener.Event{
 					Name:    event.Name,
 					Type:    listener.EventWrite,
 					Content: content,
 				})
+				if logErr != nil {
+					slog.Error("failed to log event for listener", "listener", list.Name(), "error", logErr)
+				}
 			}
 		}
 	}
