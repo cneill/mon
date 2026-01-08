@@ -83,12 +83,7 @@ func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
 		}
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil
-		// return fmt.Errorf("context cancelled")
-	case m.Events <- event:
-	}
+	m.pushEvent(ctx, event)
 
 	return nil
 }

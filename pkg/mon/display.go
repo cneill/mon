@@ -3,7 +3,9 @@ package mon
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +62,7 @@ type statusSnapshot struct {
 	NumFilesDeleted string
 	NewFiles        []string
 	DeletedFiles    []string
+	WrittenFiles    map[string]int64
 
 	NumCommits      string
 	LinesAdded      string
@@ -74,6 +77,9 @@ type statusSnapshot struct {
 
 func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 	fileStats := m.fileMonitor.Stats(final)
+	slices.Sort(fileStats.NewFiles)
+	slices.Sort(fileStats.DeletedFiles)
+
 	gitStats := m.gitMonitor.Stats(final)
 
 	snapshot := &statusSnapshot{
@@ -81,6 +87,7 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 		NumFilesDeleted: strconv.FormatInt(fileStats.NumFilesDeleted, 10),
 		NewFiles:        fileStats.NewFiles,
 		DeletedFiles:    fileStats.DeletedFiles,
+		WrittenFiles:    fileStats.WrittenFiles,
 
 		NumCommits:      strconv.FormatInt(gitStats.NumCommits, 10),
 		LinesAdded:      strconv.FormatInt(gitStats.LinesAdded, 10),
@@ -192,6 +199,18 @@ func (s *statusSnapshot) filesString() string {
 
 		for _, file := range s.DeletedFiles {
 			builder.WriteString(indent + "- " + sublabelColor.Sprint(file) + "\n")
+		}
+	}
+
+	if len(s.WrittenFiles) > 0 {
+		builder.WriteString(labelColor.Sprint("\nWritten files:\n"))
+
+		files := slices.Collect(maps.Keys(s.WrittenFiles))
+		slices.Sort(files)
+
+		for _, file := range files {
+			writes := strconv.FormatInt(s.WrittenFiles[file], 10)
+			builder.WriteString(indent + "- " + sublabelColor.Sprint(file) + separator + detailColor.Sprint(writes) + "\n")
 		}
 	}
 

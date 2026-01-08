@@ -1,12 +1,11 @@
 package files
 
-import "slices"
-
 type Stats struct {
 	NumFilesCreated int64
 	NumFilesDeleted int64
 	NewFiles        []string
 	DeletedFiles    []string
+	WrittenFiles    map[string]int64
 }
 
 func (m *Monitor) Stats(final bool) *Stats {
@@ -17,10 +16,8 @@ func (m *Monitor) Stats(final bool) *Stats {
 
 	if final {
 		stats.NewFiles = m.fileMap.NewFiles()
-		slices.Sort(stats.NewFiles)
-
 		stats.DeletedFiles = m.fileMap.DeletedFiles()
-		slices.Sort(stats.DeletedFiles)
+		stats.WrittenFiles = m.fileMap.WrittenFiles()
 	}
 
 	return stats

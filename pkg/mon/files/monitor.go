@@ -197,12 +197,29 @@ func (m *Monitor) handleEvent(ctx context.Context, event Event) {
 		if err := m.handleRemoveOrRename(ctx, event); err != nil {
 			slog.Error("failed to handle remove or rename event", "name", event.Name, "error", err)
 		}
-	case EventTypeWrite, EventTypeChmod, EventTypeUnknown:
-		select {
-		case <-ctx.Done():
-			return
-		case m.Events <- event:
+	case EventTypeWrite:
+		if err := m.fileMap.AddWrite(event.Name); err != nil {
+			slog.Error("failed to add write for file", "name", event.Name, "error", err)
 		}
+
+		m.pushEvent(ctx, event)
+	case EventTypeChmod, EventTypeUnknown:
+		m.pushEvent(ctx, event)
+	}
+}
+
+func (m *Monitor) pushEvent(ctx context.Context, event Event) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	select {
+	case <-ctx.Done():
+		if err := ctx.Err(); err != nil {
+			slog.Error("context error pushing event from file monitor", "error", err)
+		}
+
+		return
+	case m.Events <- event:
 	}
 }
 
@@ -323,12 +340,7 @@ func (m *Monitor) processExpiredDeletes(ctx context.Context) {
 
 	m.pendingDeleteMutex.Unlock()
 
-	// Send events without holding the lock
 	for _, pd := range expired {
-		select {
-		case <-ctx.Done():
-			return
-		case m.Events <- pd.event:
-		}
+		m.pushEvent(ctx, pd.event)
 	}
 }

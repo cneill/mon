@@ -23,6 +23,7 @@ type FileInfo struct {
 
 	FileType   FileType
 	WasDeleted bool // This is to track the deletion of initial files. New files will be removed from the map with Delete()
+	Writes     int64
 }
 
 func (f FileInfo) IsInitial() bool { return f.FileType == FileTypeInitial }
@@ -61,6 +62,20 @@ func (f *FileMap) AddFile(name string, info FileInfo) error {
 	}
 
 	f.files[name] = &info
+
+	return nil
+}
+
+func (f *FileMap) AddWrite(name string) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	_, ok := f.files[name]
+	if !ok {
+		return ErrUnknownFile
+	}
+
+	f.files[name].Writes++
 
 	return nil
 }
@@ -122,7 +137,7 @@ func (f *FileMap) NewFiles() []string {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
 
-	results := []string{}
+	results := make([]string, 0, len(f.files))
 
 	for name, info := range f.files {
 		if info.FileType == FileTypeNew {
@@ -137,11 +152,26 @@ func (f *FileMap) DeletedFiles() []string {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
 
-	results := []string{}
+	results := make([]string, 0, len(f.files))
 
 	for name, info := range f.files {
 		if info.WasDeleted {
 			results = append(results, name)
+		}
+	}
+
+	return results
+}
+
+func (f *FileMap) WrittenFiles() map[string]int64 {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	results := map[string]int64{}
+
+	for name, info := range f.files {
+		if info.Writes > 0 {
+			results[name] = info.Writes
 		}
 	}
 
