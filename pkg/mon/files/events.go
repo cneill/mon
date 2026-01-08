@@ -2,7 +2,6 @@ package files
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -63,8 +62,9 @@ func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
 
 	m.pendingDeleteMutex.Unlock()
 
-	if _, err := m.fileMap.Get(event.Name); !errors.Is(err, ErrUnknownFile) {
-		return fmt.Errorf("creation request for file %q that already exists", event.Name)
+	if _, err := m.fileMap.Get(event.Name); err == nil {
+		slog.Debug("got duplicate creation request, ignoring", "name", event.Name)
+		return nil
 	}
 
 	fi, err := os.Stat(event.Name)
