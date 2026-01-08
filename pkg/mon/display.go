@@ -126,7 +126,7 @@ func (s *statusSnapshot) String() string {
 		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
 	}
 
-	if since := time.Since(s.LastWrite); since > time.Minute {
+	if since := time.Since(s.LastWrite); !s.LastWrite.IsZero() && since > time.Minute {
 		builder.WriteString(separator)
 		builder.WriteString(labelColor.Sprint("[~] "))
 		builder.WriteString(sublabelColor.Sprint(durationString(since)))
