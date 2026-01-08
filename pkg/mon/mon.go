@@ -39,6 +39,7 @@ type Mon struct {
 	writeLimiter *rate.Limiter
 
 	displayChan chan struct{}
+	startTime   time.Time
 	lastWrite   time.Time
 }
 
@@ -72,6 +73,7 @@ func New(opts *Opts) (*Mon, error) {
 		fileMonitor:  fileMonitor,
 		gitMonitor:   gitMonitor,
 
+		startTime:   time.Now(),
 		displayChan: make(chan struct{}),
 	}
 

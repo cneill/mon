@@ -68,6 +68,7 @@ type statusSnapshot struct {
 	Commits         []*object.Commit
 	Patch           *object.Patch
 
+	StartTime time.Time
 	LastWrite time.Time
 }
 
@@ -88,6 +89,7 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 		Commits:         gitStats.Commits,
 		Patch:           gitStats.Patch,
 
+		StartTime: m.startTime,
 		LastWrite: m.lastWrite,
 	}
 
@@ -98,28 +100,28 @@ func (s *statusSnapshot) String() string {
 	builder := &strings.Builder{}
 	builder.Grow(50)
 
-	builder.WriteString(labelColor.Sprint("Files: "))
+	builder.WriteString(labelColor.Sprint("[F] "))
 	builder.WriteString(addedColor.Sprint("+" + s.NumFilesCreated))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint("-" + s.NumFilesDeleted))
 	builder.WriteString(separator)
-	builder.WriteString(labelColor.Sprint("Lines committed: "))
+	builder.WriteString(labelColor.Sprint("[L] "))
 	builder.WriteString(addedColor.Sprint("+" + s.LinesAdded))
 	builder.WriteString(" / ")
 	builder.WriteString(removedColor.Sprint("-" + s.LinesDeleted))
 	builder.WriteString(separator)
-	builder.WriteString(labelColor.Sprint("Commits: "))
+	builder.WriteString(labelColor.Sprint("[C] "))
 	builder.WriteString(addedColor.Sprint(s.NumCommits))
 
 	if s.UnstagedChanges != "0" {
 		builder.WriteString(separator)
-		builder.WriteString(labelColor.Sprint("Unstaged files: "))
+		builder.WriteString(labelColor.Sprint("[!] "))
 		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
 	}
 
 	if since := time.Since(s.LastWrite); since > time.Minute {
 		builder.WriteString(separator)
-		builder.WriteString(labelColor.Sprint("Last write: "))
+		builder.WriteString(labelColor.Sprint("[~] "))
 		builder.WriteString(sublabelColor.Sprint(durationString(since)))
 	}
 
@@ -131,6 +133,11 @@ func (s *statusSnapshot) Final() string {
 	builder.Grow(50)
 
 	builder.WriteString(labelColor.Sprint("Session stats:\n"))
+
+	builder.WriteString(indent)
+	builder.WriteString(sublabelColor.Sprint("Duration: "))
+	builder.WriteString(detailColor.Sprint(durationString(time.Since(s.StartTime))))
+	builder.WriteRune('\n')
 
 	builder.WriteString(indent)
 	builder.WriteString(sublabelColor.Sprint("Files: "))
@@ -270,6 +277,7 @@ func durationString(duration time.Duration) string {
 	result := ""
 	hours := int64(duration / time.Hour)
 	minutes := int64(duration / time.Minute)
+	seconds := int64(duration / time.Second)
 
 	if hours > 0 {
 		result += strconv.FormatInt(hours, 10) + "h"
@@ -278,6 +286,8 @@ func durationString(duration time.Duration) string {
 	if minutes > 0 {
 		result += strconv.FormatInt(minutes, 10) + "m"
 	}
+
+	result += strconv.FormatInt(seconds, 10) + "s"
 
 	return result
 }
