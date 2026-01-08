@@ -67,8 +67,9 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 	}
 
 	fm, err := files.NewMonitor(&files.MonitorOpts{
-		RootPath:  opts.RootPath,
-		WatchRoot: false,
+		RootPath:    opts.RootPath,
+		WatchRoot:   false,
+		TrackWrites: false,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to set up file monitor to watch git log: %w", err)
