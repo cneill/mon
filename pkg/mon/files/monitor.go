@@ -147,10 +147,6 @@ func (m *Monitor) Run(ctx context.Context) { //nolint:cyclop
 	for {
 		select {
 		case <-ctx.Done():
-			if err := ctx.Err(); err != nil {
-				slog.Error("context error", "error", err)
-			}
-
 			return
 		case event, ok := <-m.watcher.Events:
 			if !ok {

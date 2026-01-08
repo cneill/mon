@@ -3,7 +3,7 @@ package main
 import "github.com/urfave/cli/v3"
 
 func allFlags() []cli.Flag {
-	flags := []cli.Flag{}
+	flags := make([]cli.Flag, 0, len(generalFlags()))
 	flags = append(flags, generalFlags()...)
 	flags = append(flags, projectFlags()...)
 
