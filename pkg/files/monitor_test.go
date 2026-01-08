@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cneill/mon/pkg/mon/files"
+	"github.com/cneill/mon/pkg/files"
 )
 
 func TestMonitor_CreatingFiles(t *testing.T) {
