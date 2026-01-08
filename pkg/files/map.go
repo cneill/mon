@@ -3,6 +3,7 @@ package files
 import (
 	"errors"
 	"io/fs"
+	"path/filepath"
 	"sync"
 )
 
@@ -168,6 +169,21 @@ func (f *FileMap) Get(name string) (FileInfo, error) {
 	}
 
 	return *file, nil
+}
+
+func (f *FileMap) FilePathsByBase(name string) []string {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	results := []string{}
+
+	for file := range f.files {
+		if base := filepath.Base(file); base == name {
+			results = append(results, file)
+		}
+	}
+
+	return results
 }
 
 func (f *FileMap) NewFiles() []string {

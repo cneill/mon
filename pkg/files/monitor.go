@@ -139,7 +139,9 @@ func (m *Monitor) WatchFile(path string, initial bool) error {
 		FileType: fileType,
 	}
 
-	m.fileMap.AddFile(path, info)
+	if err := m.fileMap.AddFile(path, info); err != nil {
+		return fmt.Errorf("failed to add watched file to map: %w", err)
+	}
 
 	return nil
 }
@@ -190,6 +192,10 @@ func (m *Monitor) Run(ctx context.Context) {
 			slog.Error("watcher error", "error", err)
 		}
 	}
+}
+
+func (m *Monitor) FileMap() *FileMap {
+	return m.fileMap
 }
 
 func (m *Monitor) Close() {
