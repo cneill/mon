@@ -119,10 +119,27 @@ func (m *Monitor) WatchDirRecursive(path string, initial bool) error {
 	return nil
 }
 
-func (m *Monitor) WatchFile(path string) error {
+func (m *Monitor) WatchFile(path string, initial bool) error {
 	if err := m.watcher.Add(path); err != nil {
 		return fmt.Errorf("failed to monitor file %q: %w", path, err)
 	}
+
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat file %q: %w", path, err)
+	}
+
+	fileType := FileTypeInitial
+	if !initial {
+		fileType = FileTypeNew
+	}
+
+	info := FileInfo{
+		FileInfo: stat,
+		FileType: fileType,
+	}
+
+	m.fileMap.AddFile(path, info)
 
 	return nil
 }

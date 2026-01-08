@@ -49,8 +49,9 @@ func New(opts *Opts) (*Mon, error) {
 	}
 
 	fileMonitor, err := files.NewMonitor(&files.MonitorOpts{
-		RootPath:  opts.ProjectDir,
-		WatchRoot: true,
+		RootPath:    opts.ProjectDir,
+		WatchRoot:   true,
+		TrackWrites: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to set up file monitor: %w", err)

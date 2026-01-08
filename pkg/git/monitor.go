@@ -75,7 +75,7 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 		return nil, fmt.Errorf("failed to set up file monitor to watch git log: %w", err)
 	}
 
-	if err := fm.WatchFile(gitLogPath); err != nil {
+	if err := fm.WatchFile(gitLogPath, true); err != nil {
 		return nil, fmt.Errorf("failed to set up monitoring for git log file: %w", err)
 	}
 
