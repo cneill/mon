@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cneill/mon/pkg/mon/files"
-	"github.com/cneill/mon/pkg/mon/git"
+	"github.com/cneill/mon/pkg/files"
+	"github.com/cneill/mon/pkg/git"
 	"golang.org/x/time/rate"
 )
 

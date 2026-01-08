@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/cneill/mon/pkg/mon/files"
+	"github.com/cneill/mon/pkg/files"
 	"github.com/go-git/go-git/v5"
 )
 
