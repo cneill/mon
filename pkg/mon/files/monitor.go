@@ -318,7 +318,13 @@ func (m *Monitor) processExpiredDeletes(ctx context.Context) {
 
 		// Check if file still exists - if so, this was an editor swap, not a real delete
 		if _, err := os.Stat(fileName); err == nil {
-			slog.Debug("ignoring delete for file that still exists (likely editor swap)", "name", fileName)
+			// Editor swap detected via file still existing - count as a write
+			if err := m.fileMap.AddSwapWrite(fileName); err != nil {
+				slog.Error("failed to record swap write", "name", fileName, "error", err)
+			}
+
+			slog.Debug("detected editor swap (file still exists), counted as write", "name", fileName)
+
 			continue
 		}
 

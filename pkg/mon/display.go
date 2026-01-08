@@ -180,10 +180,6 @@ func (s *statusSnapshot) Final() string {
 }
 
 func (s *statusSnapshot) filesString() string {
-	if len(s.NewFiles) == 0 && len(s.DeletedFiles) == 0 {
-		return ""
-	}
-
 	builder := &strings.Builder{}
 
 	if len(s.NewFiles) > 0 {

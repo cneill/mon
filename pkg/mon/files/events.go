@@ -45,14 +45,23 @@ func (e Event) Type() EventType {
 }
 
 func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
+	m.pendingDeleteMutex.Lock()
+
 	if _, ok := m.pendingDeletes[event.Name]; ok {
-		m.pendingDeleteMutex.Lock()
 		delete(m.pendingDeletes, event.Name)
 		m.pendingDeleteMutex.Unlock()
-		slog.Debug("ignored delete+create pair", "name", event.Name)
+
+		// Editor swap detected - count this as a write to the file
+		if err := m.fileMap.AddSwapWrite(event.Name); err != nil {
+			slog.Error("failed to record swap write", "name", event.Name, "error", err)
+		}
+
+		slog.Debug("detected editor swap, counted as write", "name", event.Name)
 
 		return nil
 	}
+
+	m.pendingDeleteMutex.Unlock()
 
 	if _, err := m.fileMap.Get(event.Name); !errors.Is(err, ErrUnknownFile) {
 		return fmt.Errorf("creation request for file %q that already exists", event.Name)
@@ -101,6 +110,10 @@ func (m *Monitor) handleRemoveOrRename(_ context.Context, event Event) error {
 	}
 
 	slog.Debug("pending delete", "name", event.Name, "type", file.FileType)
+
+	// Mark file as potentially being swapped - this prevents counting writes
+	// that happen between the delete and create events of an editor swap
+	m.fileMap.MarkPendingSwap(event.Name)
 
 	m.pendingDeleteMutex.Lock()
 	m.pendingDeletes[event.Name] = pd

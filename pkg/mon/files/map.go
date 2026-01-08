@@ -21,9 +21,11 @@ const (
 type FileInfo struct {
 	fs.FileInfo
 
-	FileType   FileType
-	WasDeleted bool // This is to track the deletion of initial files. New files will be removed from the map with Delete()
-	Writes     int64
+	FileType      FileType
+	WasDeleted    bool // This is to track the deletion of initial files. New files will be removed from the map with Delete()
+	Writes        int64
+	PreSwapWrites int64 // Writes that occurred before editor swaps (not counted in final total)
+	PendingSwap   bool  // True if file has a pending delete that might be part of an editor swap
 }
 
 func (f FileInfo) IsInitial() bool { return f.FileType == FileTypeInitial }
@@ -70,14 +72,49 @@ func (f *FileMap) AddWrite(name string) error {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	_, ok := f.files[name]
+	file, ok := f.files[name]
 	if !ok {
 		return ErrUnknownFile
 	}
 
-	f.files[name].Writes++
+	// Don't count writes that happen right before a swap - the swap will be counted instead
+	if file.PendingSwap {
+		return nil
+	}
+
+	file.Writes++
 
 	return nil
+}
+
+// AddSwapWrite records a write from an editor swap (delete+create pair).
+// It also clears any writes that occurred just before the swap to avoid double-counting.
+func (f *FileMap) AddSwapWrite(name string) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	file, ok := f.files[name]
+	if !ok {
+		return ErrUnknownFile
+	}
+
+	// Clear pre-swap writes and count the swap as a single write
+	file.PreSwapWrites += file.Writes
+	file.Writes = 1
+	file.PendingSwap = false
+
+	return nil
+}
+
+// MarkPendingSwap marks a file as potentially being swapped by an editor.
+// This prevents writes from being counted until we know if a swap occurred.
+func (f *FileMap) MarkPendingSwap(name string) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if file, ok := f.files[name]; ok {
+		file.PendingSwap = true
+	}
 }
 
 func (f *FileMap) IsInitial(name string) bool {
