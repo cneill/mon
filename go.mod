@@ -7,6 +7,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-git/go-git/v5 v5.16.4
 	github.com/urfave/cli/v3 v3.6.1
+	golang.org/x/mod v0.12.0
 	golang.org/x/time v0.14.0
 )
 

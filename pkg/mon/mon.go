@@ -82,7 +82,7 @@ func New(opts *Opts) (*Mon, error) {
 		startTime:   time.Now(),
 		displayChan: make(chan struct{}),
 
-		listeners: map[string]listener.EventLogger{},
+		listeners: map[string]listener.Listener{},
 	}
 
 	mon.setupListeners()

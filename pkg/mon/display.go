@@ -73,6 +73,8 @@ type statusSnapshot struct {
 
 	StartTime time.Time
 	LastWrite time.Time
+
+	ListenerDiffs map[string]string
 }
 
 func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
@@ -98,6 +100,15 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 
 		StartTime: m.startTime,
 		LastWrite: m.lastWrite,
+
+		ListenerDiffs: map[string]string{},
+	}
+
+	for _, listener := range m.listeners {
+		diff := listener.Diff()
+		if diff != "" {
+			snapshot.ListenerDiffs[listener.Name()] = diff
+		}
 	}
 
 	return snapshot
@@ -175,6 +186,7 @@ func (s *statusSnapshot) Final() string {
 	builder.WriteString(s.filesString())
 	builder.WriteString(s.patchString())
 	builder.WriteString(s.commitsString())
+	builder.WriteString(s.listenersString())
 
 	return builder.String()
 }
@@ -283,6 +295,17 @@ func (s *statusSnapshot) commitsString() string {
 		builder.WriteString(separator)
 		builder.WriteString(msg)
 		builder.WriteRune('\n')
+	}
+
+	return builder.String()
+}
+
+func (s *statusSnapshot) listenersString() string {
+	builder := &strings.Builder{}
+
+	for listener, diff := range s.ListenerDiffs {
+		builder.WriteString(labelColor.Sprint(listener + ":\n"))
+		builder.WriteString(diff + "\n")
 	}
 
 	return builder.String()
