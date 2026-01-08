@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/cneill/mon/pkg/mon/files"
+	"github.com/cneill/mon/pkg/files"
 	"github.com/go-git/go-git/v5"
 )
 
@@ -67,14 +67,15 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 	}
 
 	fm, err := files.NewMonitor(&files.MonitorOpts{
-		RootPath:  opts.RootPath,
-		WatchRoot: false,
+		RootPath:    opts.RootPath,
+		WatchRoot:   false,
+		TrackWrites: false,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to set up file monitor to watch git log: %w", err)
 	}
 
-	if err := fm.WatchFile(gitLogPath); err != nil {
+	if err := fm.WatchFile(gitLogPath, true); err != nil {
 		return nil, fmt.Errorf("failed to set up monitoring for git log file: %w", err)
 	}
 

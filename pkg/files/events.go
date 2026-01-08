@@ -51,8 +51,15 @@ func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
 		m.pendingDeleteMutex.Unlock()
 
 		// Editor swap detected - count this as a write to the file
-		if err := m.fileMap.AddSwapWrite(event.Name); err != nil {
-			slog.Error("failed to record swap write", "name", event.Name, "error", err)
+		if m.opts.TrackWrites {
+			if err := m.fileMap.AddSwapWrite(event.Name); err != nil {
+				slog.Error("failed to record swap write", "name", event.Name, "error", err)
+			}
+
+			m.pushEvent(ctx, Event{
+				Name: event.Name,
+				Op:   fsnotify.Write,
+			})
 		}
 
 		slog.Debug("detected editor swap, counted as write", "name", event.Name)

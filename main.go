@@ -12,6 +12,8 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/cneill/mon/internal/version"
+	"github.com/cneill/mon/pkg/listener"
+	"github.com/cneill/mon/pkg/listener/golang"
 	"github.com/cneill/mon/pkg/mon"
 	"github.com/fatih/color"
 )
@@ -53,6 +55,9 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 	opts := &mon.Opts{
 		NoColor:    cmd.Bool(FlagNoColor),
 		ProjectDir: projectDir,
+		Listeners: []listener.Listener{
+			golang.New(),
+		},
 	}
 
 	mon, err := mon.New(opts) //nolint:contextcheck

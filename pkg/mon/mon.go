@@ -6,17 +6,20 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/cneill/mon/pkg/mon/files"
-	"github.com/cneill/mon/pkg/mon/git"
+	"github.com/cneill/mon/pkg/files"
+	"github.com/cneill/mon/pkg/git"
+	"github.com/cneill/mon/pkg/listener"
 	"golang.org/x/time/rate"
 )
 
 type Opts struct {
 	NoColor    bool
 	ProjectDir string
+	Listeners  []listener.Listener
 }
 
 func (o *Opts) OK() error {
@@ -41,6 +44,8 @@ type Mon struct {
 	displayChan chan struct{}
 	startTime   time.Time
 	lastWrite   time.Time
+
+	listeners map[string]listener.Listener
 }
 
 func New(opts *Opts) (*Mon, error) {
@@ -49,8 +54,9 @@ func New(opts *Opts) (*Mon, error) {
 	}
 
 	fileMonitor, err := files.NewMonitor(&files.MonitorOpts{
-		RootPath:  opts.ProjectDir,
-		WatchRoot: true,
+		RootPath:    opts.ProjectDir,
+		WatchRoot:   true,
+		TrackWrites: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to set up file monitor: %w", err)
@@ -75,6 +81,12 @@ func New(opts *Opts) (*Mon, error) {
 
 		startTime:   time.Now(),
 		displayChan: make(chan struct{}),
+
+		listeners: map[string]listener.Listener{},
+	}
+
+	if err := mon.setupListeners(); err != nil {
+		return nil, fmt.Errorf("failed to set up listeners: %w", err)
 	}
 
 	return mon, nil
@@ -116,6 +128,35 @@ func (m *Mon) Run(ctx context.Context) error {
 
 func (m *Mon) Teardown() {
 	close(m.displayChan)
+}
+
+func (m *Mon) setupListeners() error {
+	fileMap := m.fileMonitor.FileMap()
+
+	for _, list := range m.Listeners {
+		for _, file := range list.WatchedFiles() {
+			m.listeners[file] = list
+
+			initialFiles := fileMap.FilePathsByBase(file)
+			for _, path := range initialFiles {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					return fmt.Errorf("failed to read file %q for listener %q: %w", path, list.Name(), err)
+				}
+
+				logErr := list.LogEvent(listener.Event{
+					Name:    path,
+					Type:    listener.EventInit,
+					Content: content,
+				})
+				if logErr != nil {
+					return fmt.Errorf("failed to log initializing event for file %q for listener %q: %w", path, list.Name(), logErr)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (m *Mon) handleEvents(ctx context.Context) {
@@ -161,6 +202,26 @@ func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 			case <-ctx.Done():
 				return
 			case m.gitMonitor.FileEvents <- event:
+			}
+		}
+
+		base := filepath.Base(event.Name)
+		for file, list := range m.listeners {
+			if base == file {
+				content, err := os.ReadFile(event.Name)
+				if err != nil {
+					slog.Error("failed to read contents of file for listener", "name", event.Name, "error", err, "listener", list.Name())
+					continue
+				}
+
+				logErr := list.LogEvent(listener.Event{
+					Name:    event.Name,
+					Type:    listener.EventWrite,
+					Content: content,
+				})
+				if logErr != nil {
+					slog.Error("failed to log event for listener", "listener", list.Name(), "error", logErr)
+				}
 			}
 		}
 	}

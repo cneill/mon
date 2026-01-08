@@ -14,8 +14,9 @@ import (
 )
 
 type MonitorOpts struct {
-	RootPath  string
-	WatchRoot bool
+	RootPath    string
+	WatchRoot   bool
+	TrackWrites bool
 }
 
 func (m *MonitorOpts) OK() error {
@@ -118,9 +119,28 @@ func (m *Monitor) WatchDirRecursive(path string, initial bool) error {
 	return nil
 }
 
-func (m *Monitor) WatchFile(path string) error {
+func (m *Monitor) WatchFile(path string, initial bool) error {
 	if err := m.watcher.Add(path); err != nil {
 		return fmt.Errorf("failed to monitor file %q: %w", path, err)
+	}
+
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat file %q: %w", path, err)
+	}
+
+	fileType := FileTypeInitial
+	if !initial {
+		fileType = FileTypeNew
+	}
+
+	info := FileInfo{
+		FileInfo: stat,
+		FileType: fileType,
+	}
+
+	if err := m.fileMap.AddFile(path, info); err != nil {
+		return fmt.Errorf("failed to add watched file to map: %w", err)
 	}
 
 	return nil
@@ -174,6 +194,10 @@ func (m *Monitor) Run(ctx context.Context) {
 	}
 }
 
+func (m *Monitor) FileMap() *FileMap {
+	return m.fileMap
+}
+
 func (m *Monitor) Close() {
 	if err := m.watcher.Close(); err != nil {
 		slog.Error("Failed to shut down fsnotify watcher", "error", err)
@@ -194,8 +218,10 @@ func (m *Monitor) handleEvent(ctx context.Context, event Event) {
 			slog.Error("failed to handle remove or rename event", "name", event.Name, "error", err)
 		}
 	case EventTypeWrite:
-		if err := m.fileMap.AddWrite(event.Name); err != nil {
-			slog.Error("failed to add write for file", "name", event.Name, "error", err)
+		if m.opts.TrackWrites {
+			if err := m.fileMap.AddWrite(event.Name); err != nil {
+				slog.Error("failed to add write for file", "name", event.Name, "error", err)
+			}
 		}
 
 		m.pushEvent(ctx, event)
@@ -315,8 +341,10 @@ func (m *Monitor) processExpiredDeletes(ctx context.Context) {
 		// Check if file still exists - if so, this was an editor swap, not a real delete
 		if _, err := os.Stat(fileName); err == nil {
 			// Editor swap detected via file still existing - count as a write
-			if err := m.fileMap.AddSwapWrite(fileName); err != nil {
-				slog.Error("failed to record swap write", "name", fileName, "error", err)
+			if m.opts.TrackWrites {
+				if err := m.fileMap.AddSwapWrite(fileName); err != nil {
+					slog.Error("failed to record swap write", "name", fileName, "error", err)
+				}
 			}
 
 			slog.Debug("detected editor swap (file still exists), counted as write", "name", fileName)
