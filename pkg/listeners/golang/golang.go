@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cneill/mon/pkg/listener"
+	"github.com/cneill/mon/pkg/listeners"
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
@@ -31,11 +31,11 @@ func (l *Listener) WatchedFiles() []string {
 	}
 }
 
-func (l *Listener) LogEvent(event listener.Event) error {
+func (l *Listener) LogEvent(event listeners.Event) error {
 	base := filepath.Base(event.Name)
 
 	switch event.Type {
-	case listener.EventInit:
+	case listeners.EventInit:
 		if base == "go.mod" {
 			slog.Debug("got write event for go.mod file", "path", event.Name)
 			l.mutex.Lock()
@@ -46,7 +46,7 @@ func (l *Listener) LogEvent(event listener.Event) error {
 			l.mutex.Unlock()
 		}
 
-	case listener.EventWrite:
+	case listeners.EventWrite:
 		if base == "go.mod" {
 			for _, modFile := range l.modFiles {
 				if modFile.Path == event.Name {

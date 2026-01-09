@@ -1,4 +1,4 @@
-package listener
+package listeners
 
 type Listener interface {
 	Name() string
