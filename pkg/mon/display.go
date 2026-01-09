@@ -220,7 +220,7 @@ func (s *statusSnapshot) filesString() string {
 
 		for _, file := range files {
 			writes := strconv.FormatInt(s.WrittenFiles[file], 10)
-			builder.WriteString(indent + "- " + sublabelColor.Sprint(file) + separator + detailColor.Sprint(writes) + "\n")
+			builder.WriteString(indent + sublabelColor.Sprint(file) + separator + detailColor.Sprint(writes) + "\n")
 		}
 	}
 
