@@ -104,10 +104,12 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 		ListenerDiffs: map[string]string{},
 	}
 
-	for _, listener := range m.listeners {
-		diff := listener.Diff()
-		if diff != "" {
-			snapshot.ListenerDiffs[listener.Name()] = diff
+	if final {
+		for _, listener := range m.listeners {
+			diff := listener.Diff()
+			if diff != "" {
+				snapshot.ListenerDiffs[listener.Name()] = diff
+			}
 		}
 	}
 

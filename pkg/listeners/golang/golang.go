@@ -1,15 +1,16 @@
 package golang
 
 import (
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/cneill/mon/pkg/deps"
 	"github.com/cneill/mon/pkg/listeners"
 
 	"golang.org/x/mod/modfile"
-	"golang.org/x/mod/module"
 )
 
 type Listener struct {
@@ -83,81 +84,40 @@ type ModFile struct {
 	LatestContent  []byte
 }
 
-func (m *ModFile) Diff() string { //nolint:cyclop
+func (m *ModFile) Diff() string {
 	if m.LatestContent == nil {
 		return ""
 	}
 
-	initialFile, err := modfile.Parse(m.Path, m.InitialContent, nil)
+	initialDeps, err := ParseDeps(m.Path, m.InitialContent)
 	if err != nil {
-		slog.Error("failed to parse initial contents of go.mod file", "path", m.Path, "error", err)
+		slog.Error("initial go.mod file invalid", "error", err)
 		return ""
 	}
 
-	latestFile, err := modfile.Parse(m.Path, m.LatestContent, nil)
+	latestDeps, err := ParseDeps(m.Path, m.LatestContent)
 	if err != nil {
-		slog.Error("failed to parse latest contents of go.mod file", "path", m.Path, "error", err)
+		slog.Error("current go.mod file invalid", "error", err)
 		return ""
 	}
 
-	initialRequires := map[string]module.Version{}
-	for _, require := range initialFile.Require {
-		initialRequires[require.Mod.Path] = require.Mod
+	return latestDeps.Diff(initialDeps)
+}
+
+func ParseDeps(modFilePath string, modFileContents []byte) (deps.Dependencies, error) {
+	parsedFile, err := modfile.Parse(modFilePath, modFileContents, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse go.mod file %q: %w", modFilePath, err)
 	}
 
-	latestRequires := map[string]module.Version{}
-	for _, require := range latestFile.Require {
-		latestRequires[require.Mod.Path] = require.Mod
-	}
-
-	var added, removed, bumped []string
-
-	// Find added and bumped packages
-	for path, latestMod := range latestRequires {
-		initialMod, existed := initialRequires[path]
-		if !existed {
-			added = append(added, path+"@"+latestMod.Version)
-		} else if initialMod.Version != latestMod.Version {
-			bumped = append(bumped, path+": "+initialMod.Version+" => "+latestMod.Version)
+	results := make(deps.Dependencies, len(parsedFile.Require))
+	for i, require := range parsedFile.Require {
+		results[i] = deps.Dependency{
+			Name:    "",
+			URL:     require.Mod.Path,
+			Version: require.Mod.Version,
 		}
 	}
 
-	// Find removed packages
-	for path, initialMod := range initialRequires {
-		if _, exists := latestRequires[path]; !exists {
-			removed = append(removed, path+"@"+initialMod.Version)
-		}
-	}
-
-	if len(added) == 0 && len(removed) == 0 && len(bumped) == 0 {
-		return ""
-	}
-
-	builder := &strings.Builder{}
-
-	if len(added) > 0 {
-		builder.WriteString("  Added:\n")
-
-		for _, pkg := range added {
-			builder.WriteString("    + " + pkg + "\n")
-		}
-	}
-
-	if len(removed) > 0 {
-		builder.WriteString("  Removed:\n")
-
-		for _, pkg := range removed {
-			builder.WriteString("    - " + pkg + "\n")
-		}
-	}
-
-	if len(bumped) > 0 {
-		builder.WriteString("  Version changes:\n")
-
-		for _, pkg := range bumped {
-			builder.WriteString("    ~ " + pkg + "\n")
-		}
-	}
-
-	return builder.String()
+	return results, nil
 }

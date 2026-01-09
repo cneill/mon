@@ -139,6 +139,8 @@ func (m *Mon) setupListeners() error {
 
 			initialFiles := fileMap.FilePathsByBase(file)
 			for _, path := range initialFiles {
+				slog.Debug("found file for listener", "listener", listener.Name(), "path", path)
+
 				content, err := os.ReadFile(path)
 				if err != nil {
 					return fmt.Errorf("failed to read file %q for listener %q: %w", path, listener.Name(), err)
@@ -222,6 +224,8 @@ func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 				if logErr != nil {
 					slog.Error("failed to log event for listener", "listener", listener.Name(), "error", logErr)
 				}
+
+				slog.Debug("logged update to listened file", "listener", listener.Name(), "path", event.Name)
 			}
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/cneill/mon/internal/version"
 	"github.com/cneill/mon/pkg/listeners"
 	"github.com/cneill/mon/pkg/listeners/golang"
+	"github.com/cneill/mon/pkg/listeners/npm"
 	"github.com/cneill/mon/pkg/mon"
 	"github.com/fatih/color"
 )
@@ -57,6 +58,7 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		ProjectDir: projectDir,
 		Listeners: []listeners.Listener{
 			golang.New(),
+			npm.New(),
 		},
 	}
 
