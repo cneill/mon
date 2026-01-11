@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/urfave/cli/v3"
@@ -22,10 +23,12 @@ import (
 
 func run(ctx context.Context) error {
 	cmd := cli.Command{
-		Name:    "mon",
-		Version: version.String(),
-		Flags:   allFlags(),
-		Action:  setupMon,
+		Name:      "mon",
+		Usage:     "What are those agents up to, after all?",
+		Version:   version.String(),
+		Flags:     allFlags(),
+		Action:    setupMon,
+		ArgsUsage: "[PROJECT_DIRECTORY]",
 	}
 
 	if err := cmd.Run(ctx, os.Args); err != nil {
@@ -36,6 +39,13 @@ func run(ctx context.Context) error {
 }
 
 func setupMon(ctx context.Context, cmd *cli.Command) error {
+	args := cmd.Args()
+	rawProjectDir := "."
+
+	if args.Len() > 0 {
+		rawProjectDir = strings.TrimSpace(args.First())
+	}
+
 	color.NoColor = cmd.Bool(FlagNoColor)
 
 	if cmd.Bool(FlagDebug) {
@@ -46,8 +56,6 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 
 		defer file.Close()
 	}
-
-	rawProjectDir := cmd.String(FlagProjectDir)
 
 	projectDir, err := filepath.Abs(filepath.Clean(rawProjectDir))
 	if err != nil {
