@@ -24,7 +24,7 @@ import (
 func run(ctx context.Context) error {
 	cmd := cli.Command{
 		Name:      "mon",
-		Usage:     "What are those agents up to, after all?",
+		Usage:     "What are those coding agents up to, after all?",
 		Version:   version.String(),
 		Flags:     allFlags(),
 		Action:    setupMon,
