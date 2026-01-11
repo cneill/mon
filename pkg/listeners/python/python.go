@@ -39,48 +39,11 @@ func (l *Listener) WatchedFiles() []string {
 func (l *Listener) LogEvent(event listeners.Event) error {
 	base := filepath.Base(event.Name)
 
-	switch event.Type {
-	case listeners.EventInit:
-		l.mutex.Lock()
-
-		switch base {
-		case "requirements.txt":
-			slog.Debug("got init event for requirements.txt file", "path", event.Name)
-			l.requirementsFiles = append(l.requirementsFiles, &RequirementsFile{
-				Path:           event.Name,
-				InitialContent: event.Content,
-			})
-		case "pyproject.toml":
-			slog.Debug("got init event for pyproject.toml file", "path", event.Name)
-			l.pyprojectFiles = append(l.pyprojectFiles, &PyProjectFile{
-				Path:           event.Name,
-				InitialContent: event.Content,
-			})
-		}
-
-		l.mutex.Unlock()
-
-	case listeners.EventWrite:
-		l.mutex.Lock()
-
-		switch base {
-		case "requirements.txt":
-			for _, reqFile := range l.requirementsFiles {
-				if reqFile.Path == event.Name {
-					slog.Debug("got write event for requirements.txt file", "path", event.Name)
-					reqFile.LatestContent = event.Content
-				}
-			}
-		case "pyproject.toml":
-			for _, pyFile := range l.pyprojectFiles {
-				if pyFile.Path == event.Name {
-					slog.Debug("got write event for pyproject.toml file", "path", event.Name)
-					pyFile.LatestContent = event.Content
-				}
-			}
-		}
-
-		l.mutex.Unlock()
+	switch base {
+	case "requirements.txt":
+		return l.handleRequirementsTxt(event)
+	case "pyproject.toml":
+		return l.handlePyProjectToml(event)
 	}
 
 	return nil
@@ -124,6 +87,53 @@ func (r *RequirementsFile) Diff() string {
 	latestDeps := ParseRequirementsTxt(r.LatestContent)
 
 	return latestDeps.Diff(initialDeps)
+}
+
+func (l *Listener) handleRequirementsTxt(event listeners.Event) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	switch event.Type {
+	case listeners.EventInit:
+		slog.Debug("got init event for requirements.txt file", "path", event.Name)
+		l.requirementsFiles = append(l.requirementsFiles, &RequirementsFile{
+			Path:           event.Name,
+			InitialContent: event.Content,
+		})
+
+	case listeners.EventWrite:
+		for _, reqFile := range l.requirementsFiles {
+			if reqFile.Path == event.Name {
+				slog.Debug("got write event for requirements.txt file", "path", event.Name)
+				reqFile.LatestContent = event.Content
+			}
+		}
+	}
+
+	return nil
+}
+
+func (l *Listener) handlePyProjectToml(event listeners.Event) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	switch event.Type {
+	case listeners.EventInit:
+		slog.Debug("got init event for pyproject.toml file", "path", event.Name)
+		l.pyprojectFiles = append(l.pyprojectFiles, &PyProjectFile{
+			Path:           event.Name,
+			InitialContent: event.Content,
+		})
+	case listeners.EventWrite:
+		for _, pyFile := range l.pyprojectFiles {
+			if pyFile.Path == event.Name {
+				slog.Debug("got write event for pyproject.toml file", "path", event.Name)
+				pyFile.LatestContent = event.Content
+			}
+		}
+	}
+
+	return nil
 }
 
 // PyProjectFile tracks a pyproject.toml file's initial and latest content.
