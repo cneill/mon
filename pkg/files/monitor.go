@@ -72,39 +72,29 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 }
 
 func (m *Monitor) WatchDirRecursive(path string, initial bool) error {
-	err := filepath.WalkDir(path, func(walkPath string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(path, func(walkPath string, dirEntry os.DirEntry, err error) error {
 		if err != nil {
 			return err
-		}
-
-		if !d.IsDir() {
-			return nil
 		}
 
 		if filepath.Base(walkPath) == ".git" {
 			return filepath.SkipDir
 		}
 
-		if err := m.watcher.Add(walkPath); err != nil {
-			return fmt.Errorf("failed to monitor directory %q: %w", walkPath, err)
+		if !initial && !m.fileMap.Has(walkPath) {
+			if err := m.fileMap.AddNewPath(walkPath); err != nil {
+				return fmt.Errorf("failed to add new path %q to file map during watch walk: %w", walkPath, err)
+			}
+
+			slog.Debug("Added new path during watch walk", "path", walkPath)
 		}
 
-		if !m.fileMap.Has(walkPath) && !initial {
-			stat, err := os.Stat(walkPath)
-			if err != nil {
-				slog.Error("failed to stat file while walking to recursively watch", "root_path", path, "walk_path", walkPath, "error", err)
-			}
+		if !dirEntry.IsDir() {
+			return nil
+		}
 
-			info := FileInfo{
-				FileInfo: stat,
-				FileType: FileTypeNew,
-			}
-
-			if err := m.fileMap.AddFile(walkPath, info); err != nil {
-				return fmt.Errorf("failed to watch discovered directory: %w", err)
-			}
-
-			slog.Debug("Added new directory", "path", walkPath)
+		if err := m.watcher.Add(walkPath); err != nil {
+			return fmt.Errorf("failed to monitor directory %q: %w", walkPath, err)
 		}
 
 		return nil
@@ -113,8 +103,8 @@ func (m *Monitor) WatchDirRecursive(path string, initial bool) error {
 		return fmt.Errorf("failed to set up recursive directory watching for %q: %w", path, err)
 	}
 
-	watched := m.watcher.WatchList()
-	slog.Debug("Watch list", "paths", watched)
+	// watched := m.watcher.WatchList()
+	// slog.Debug("Watch list", "paths", watched)
 
 	return nil
 }

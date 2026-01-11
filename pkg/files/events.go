@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -69,34 +68,27 @@ func (m *Monitor) handleCreate(ctx context.Context, event Event) error {
 
 	m.pendingDeleteMutex.Unlock()
 
-	if _, err := m.fileMap.Get(event.Name); err == nil {
+	if m.fileMap.Has(event.Name) {
 		slog.Debug("got duplicate creation request, ignoring", "name", event.Name)
 		return nil
 	}
 
-	fi, err := os.Stat(event.Name)
-	if err != nil {
-		return fmt.Errorf("failed to stat new file %q: %w", event.Name, err)
+	if err := m.fileMap.AddNewPath(event.Name); err != nil {
+		return err
 	}
 
-	info := FileInfo{
-		FileInfo: fi,
-		FileType: FileTypeNew,
-	}
+	slog.Debug("Added new file after creation event", "name", event.Name)
 
-	if err := m.fileMap.AddFile(event.Name, info); err != nil {
-		return fmt.Errorf("failed to add new file %q upon creation event: %w", event.Name, err)
-	}
+	if m.fileMap.IsDir(event.Name) {
+		go func() {
+			// We want to try to catch e.g. mkdir -p calls that rapidly create nested directories
+			time.Sleep(time.Millisecond * 250)
 
-	slog.Debug("Added new file", "name", event.Name)
-
-	if fi.IsDir() {
-		// We want to try to catch e.g. mkdir -p calls that rapidly create nested directories
-		time.Sleep(time.Millisecond * 250)
-
-		if err := m.WatchDirRecursive(event.Name, false); err != nil {
-			return err
-		}
+			if err := m.WatchDirRecursive(event.Name, false); err != nil {
+				slog.Error("failed to monitor new directory", "path", event.Name, "error", err)
+				// return err
+			}
+		}()
 	}
 
 	m.pushEvent(ctx, event)

@@ -2,8 +2,11 @@ package files
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -45,11 +48,11 @@ func NewFileMap() *FileMap {
 	}
 }
 
-func (f *FileMap) AddFile(name string, info FileInfo) error {
+func (f *FileMap) AddFile(path string, info FileInfo) error {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	file, ok := f.files[name]
+	file, ok := f.files[path]
 	if ok {
 		if !file.WasDeleted {
 			return ErrFileTracked
@@ -64,16 +67,43 @@ func (f *FileMap) AddFile(name string, info FileInfo) error {
 		f.filesCreated++
 	}
 
-	f.files[name] = &info
+	f.files[path] = &info
 
 	return nil
 }
 
-func (f *FileMap) AddWrite(name string) error {
+// AddNewPath will stat the given path and add it to the map if it is not already known. This should not be used for
+// initial files. Calling this with a known path will return ErrFileTracked.
+func (f *FileMap) AddNewPath(path string) error {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	file, ok := f.files[name]
+	_, ok := f.files[path]
+	if ok {
+		return ErrFileTracked
+	}
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat new file %q: %w", path, err)
+	}
+
+	info := FileInfo{
+		FileInfo: fi,
+		FileType: FileTypeNew,
+	}
+
+	f.files[path] = &info
+	f.filesCreated++
+
+	return nil
+}
+
+func (f *FileMap) AddWrite(path string) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	file, ok := f.files[path]
 	if !ok {
 		return ErrUnknownFile
 	}
@@ -90,11 +120,11 @@ func (f *FileMap) AddWrite(name string) error {
 
 // AddSwapWrite records a write from an editor swap (delete+create pair).
 // It also clears any writes that occurred just before the swap to avoid double-counting.
-func (f *FileMap) AddSwapWrite(name string) error {
+func (f *FileMap) AddSwapWrite(path string) error {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	file, ok := f.files[name]
+	file, ok := f.files[path]
 	if !ok {
 		return ErrUnknownFile
 	}
@@ -109,20 +139,20 @@ func (f *FileMap) AddSwapWrite(name string) error {
 
 // MarkPendingSwap marks a file as potentially being swapped by an editor.
 // This prevents writes from being counted until we know if a swap occurred.
-func (f *FileMap) MarkPendingSwap(name string) {
+func (f *FileMap) MarkPendingSwap(path string) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	if file, ok := f.files[name]; ok {
+	if file, ok := f.files[path]; ok {
 		file.PendingSwap = true
 	}
 }
 
-func (f *FileMap) IsInitial(name string) bool {
+func (f *FileMap) IsInitial(path string) bool {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
 
-	file, ok := f.files[name]
+	file, ok := f.files[path]
 	if !ok {
 		return false
 	}
@@ -130,40 +160,36 @@ func (f *FileMap) IsInitial(name string) bool {
 	return file.IsInitial()
 }
 
-func (f *FileMap) Delete(name string) error {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	file, ok := f.files[name]
-	if !ok {
-		return ErrUnknownFile
-	}
-
-	if file.IsInitial() {
-		file.WasDeleted = true
-		f.filesDeleted++
-	} else {
-		delete(f.files, name)
-		f.filesCreated--
-	}
-
-	return nil
-}
-
-func (f *FileMap) Has(name string) bool {
+func (f *FileMap) IsDir(path string) bool {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
 
-	_, ok := f.files[name]
+	file, ok := f.files[path]
+	if !ok {
+		return false
+	}
+
+	return file.IsDir()
+}
+
+func (f *FileMap) Delete(path string) error {
+	return f.deleteIndividual(path, true)
+}
+
+func (f *FileMap) Has(path string) bool {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	_, ok := f.files[path]
 
 	return ok
 }
 
-func (f *FileMap) Get(name string) (FileInfo, error) {
+func (f *FileMap) Get(path string) (FileInfo, error) {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
 
-	file, ok := f.files[name]
+	file, ok := f.files[path]
 	if !ok {
 		return FileInfo{}, ErrUnknownFile
 	}
@@ -243,4 +269,51 @@ func (f *FileMap) FilesDeleted() int64 {
 	defer f.mutex.RUnlock()
 
 	return f.filesDeleted
+}
+
+func (f *FileMap) deleteIndividual(path string, recursive bool) error {
+	f.mutex.RLock()
+	file, ok := f.files[path]
+	f.mutex.RUnlock()
+
+	if !ok {
+		return ErrUnknownFile
+	}
+
+	if file.IsInitial() {
+		file.WasDeleted = true
+		f.filesDeleted++
+	} else {
+		f.mutex.Lock()
+		delete(f.files, path)
+		f.mutex.Unlock()
+		f.filesCreated--
+	}
+
+	if recursive && file.IsDir() {
+		return f.deleteChildren(path)
+	}
+
+	return nil
+}
+
+func (f *FileMap) deleteChildren(parentPath string) error {
+	toDelete := make([]string, 0, len(f.files))
+	f.mutex.RLock()
+
+	for path := range f.files {
+		if strings.HasPrefix(path, parentPath) {
+			toDelete = append(toDelete, path)
+		}
+	}
+
+	f.mutex.RUnlock()
+
+	for _, path := range toDelete {
+		if err := f.deleteIndividual(path, false); err != nil {
+			return fmt.Errorf("failed to delete child path %q of %q: %w", path, parentPath, err)
+		}
+	}
+
+	return nil
 }

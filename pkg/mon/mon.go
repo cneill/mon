@@ -173,7 +173,7 @@ func (m *Mon) handleEvents(ctx context.Context) {
 				return
 			}
 
-			m.handleFileEvent(ctx, event)
+			go m.handleFileEvent(ctx, event)
 
 		case event, ok := <-m.gitMonitor.GitEvents:
 			if !ok {
