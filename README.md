@@ -19,9 +19,9 @@ go install github.com/cneill/mon@latest
 * Git commits
 * Untracked changes
 * File write counts
-* Requirements added/deleted/modified
-    * Golang go.mod
-    * NPM package.json
+* Dependencies added/deleted/modified
+    * Golang (go.mod)
+    * NPM (package.json)
     * Python (requirements.txt / pyproject.toml)
 
 ## Flags
