@@ -1,6 +1,6 @@
 # mon
 
-What are those agents up to, after all?
+What are those coding agents up to, after all?
 
 ## Installation
 
@@ -10,7 +10,19 @@ What are those agents up to, after all?
 go install github.com/cneill/mon@latest
 ```
 
-[**Grab the latest release**](https://github.com/cneill/mon/releases/latest)
+[**Or grab the latest release**](https://github.com/cneill/mon/releases/latest)
+
+## Stats tracked
+
+* Files created/deleted
+* Lines added/deleted in git commits
+* Git commits
+* Untracked changes
+* File write counts
+* Requirements added/deleted/modified
+    * Golang go.mod
+    * NPM package.json
+    * Python (requirements.txt / pyproject.toml)
 
 ## Flags
 
