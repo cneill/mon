@@ -107,7 +107,7 @@ func (p *PackageFile) Diff() *deps.FileDiff {
 	return &diff
 }
 
-// TODO: add/shift to package-lock.json
+// Might want to add/shift to package-lock.json in the future?
 
 type PackageJSON struct {
 	Name        string `json:"name"`
