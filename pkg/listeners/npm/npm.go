@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/url"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/cneill/mon/pkg/deps"
@@ -66,18 +65,18 @@ func (l *Listener) LogEvent(event listeners.Event) error {
 	return nil
 }
 
-func (l *Listener) Diff() string {
-	builder := &strings.Builder{}
+func (l *Listener) Diff() listeners.Diff {
+	result := listeners.Diff{
+		DependencyFileDiffs: deps.FileDiffs{},
+	}
 
 	for _, pkgFile := range l.packageFiles {
-		diff := pkgFile.Diff()
-		if diff != "" {
-			builder.WriteString(pkgFile.Path + ":\n")
-			builder.WriteString(diff + "\n\n")
+		if diff := pkgFile.Diff(); diff != nil {
+			result.DependencyFileDiffs = append(result.DependencyFileDiffs, *diff)
 		}
 	}
 
-	return builder.String()
+	return result
 }
 
 type PackageFile struct {
@@ -86,24 +85,26 @@ type PackageFile struct {
 	LatestContent  []byte
 }
 
-func (p *PackageFile) Diff() string {
+func (p *PackageFile) Diff() *deps.FileDiff {
 	var parsedInitial PackageJSON
 	if err := json.Unmarshal(p.InitialContent, &parsedInitial); err != nil {
-		slog.Error("initial package.json file invalid", "error", err)
-		return ""
+		slog.Error("initial package.json file invalid", "path", p.Path, "error", err)
+		return nil
 	}
 
 	initialDeps := parsedInitial.ToDeps()
 
 	var parsedLatest PackageJSON
 	if err := json.Unmarshal(p.LatestContent, &parsedLatest); err != nil {
-		slog.Error("latest package.json file invalid", "error", err)
-		return ""
+		slog.Error("latest package.json file invalid", "path", p.Path, "error", err)
+		return nil
 	}
 
 	latestDeps := parsedLatest.ToDeps()
 
-	return latestDeps.Diff(initialDeps)
+	diff := latestDeps.Diff(p.Path, initialDeps)
+
+	return &diff
 }
 
 // TODO: add/shift to package-lock.json

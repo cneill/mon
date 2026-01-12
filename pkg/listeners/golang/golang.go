@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/cneill/mon/pkg/deps"
@@ -65,18 +64,18 @@ func (l *Listener) LogEvent(event listeners.Event) error {
 	return nil
 }
 
-func (l *Listener) Diff() string {
-	builder := &strings.Builder{}
+func (l *Listener) Diff() listeners.Diff {
+	result := listeners.Diff{
+		DependencyFileDiffs: deps.FileDiffs{},
+	}
 
 	for _, modFile := range l.modFiles {
-		diff := modFile.Diff()
-		if diff != "" {
-			builder.WriteString(modFile.Path + ":\n")
-			builder.WriteString(diff + "\n\n")
+		if diff := modFile.Diff(); diff != nil {
+			result.DependencyFileDiffs = append(result.DependencyFileDiffs, *diff)
 		}
 	}
 
-	return builder.String()
+	return result
 }
 
 type ModFile struct {
@@ -85,24 +84,26 @@ type ModFile struct {
 	LatestContent  []byte
 }
 
-func (m *ModFile) Diff() string {
+func (m *ModFile) Diff() *deps.FileDiff {
 	if m.LatestContent == nil {
-		return ""
+		return nil
 	}
 
 	initialDeps, err := ParseDeps(m.Path, m.InitialContent)
 	if err != nil {
 		slog.Error("initial go.mod file invalid", "error", err)
-		return ""
+		return nil
 	}
 
 	latestDeps, err := ParseDeps(m.Path, m.LatestContent)
 	if err != nil {
-		slog.Error("current go.mod file invalid", "error", err)
-		return ""
+		slog.Error("latest go.mod file invalid", "error", err)
+		return nil
 	}
 
-	return latestDeps.Diff(initialDeps)
+	diff := latestDeps.Diff(m.Path, initialDeps)
+
+	return &diff
 }
 
 func ParseDeps(modFilePath string, modFileContents []byte) (deps.Dependencies, error) {

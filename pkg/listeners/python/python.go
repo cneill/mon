@@ -49,26 +49,24 @@ func (l *Listener) LogEvent(event listeners.Event) error {
 	return nil
 }
 
-func (l *Listener) Diff() string {
-	builder := &strings.Builder{}
+func (l *Listener) Diff() listeners.Diff {
+	result := listeners.Diff{
+		DependencyFileDiffs: deps.FileDiffs{},
+	}
 
 	for _, reqFile := range l.requirementsFiles {
-		diff := reqFile.Diff()
-		if diff != "" {
-			builder.WriteString(reqFile.Path + ":\n")
-			builder.WriteString(diff + "\n\n")
+		if diff := reqFile.Diff(); diff != nil {
+			result.DependencyFileDiffs = append(result.DependencyFileDiffs, *diff)
 		}
 	}
 
 	for _, pyFile := range l.pyprojectFiles {
-		diff := pyFile.Diff()
-		if diff != "" {
-			builder.WriteString(pyFile.Path + ":\n")
-			builder.WriteString(diff + "\n\n")
+		if diff := pyFile.Diff(); diff != nil {
+			result.DependencyFileDiffs = append(result.DependencyFileDiffs, *diff)
 		}
 	}
 
-	return builder.String()
+	return result
 }
 
 // RequirementsFile tracks a requirements.txt file's initial and latest content.
@@ -78,15 +76,17 @@ type RequirementsFile struct {
 	LatestContent  []byte
 }
 
-func (r *RequirementsFile) Diff() string {
+func (r *RequirementsFile) Diff() *deps.FileDiff {
 	if r.LatestContent == nil {
-		return ""
+		return nil
 	}
 
 	initialDeps := ParseRequirementsTxt(r.InitialContent)
 	latestDeps := ParseRequirementsTxt(r.LatestContent)
 
-	return latestDeps.Diff(initialDeps)
+	diff := latestDeps.Diff(r.Path, initialDeps)
+
+	return &diff
 }
 
 func (l *Listener) handleRequirementsTxt(event listeners.Event) error {
@@ -145,24 +145,26 @@ type PyProjectFile struct {
 	LatestContent  []byte
 }
 
-func (p *PyProjectFile) Diff() string {
+func (p *PyProjectFile) Diff() *deps.FileDiff {
 	if p.LatestContent == nil {
-		return ""
+		return nil
 	}
 
 	initialDeps, err := ParsePyProjectToml(p.InitialContent)
 	if err != nil {
-		slog.Error("initial pyproject.toml file invalid", "error", err)
-		return ""
+		slog.Error("initial pyproject.toml file invalid", "path", p.Path, "error", err)
+		return nil
 	}
 
 	latestDeps, err := ParsePyProjectToml(p.LatestContent)
 	if err != nil {
-		slog.Error("latest pyproject.toml file invalid", "error", err)
-		return ""
+		slog.Error("latest pyproject.toml file invalid", "path", p.Path, "error", err)
+		return nil
 	}
 
-	return latestDeps.Diff(initialDeps)
+	diff := latestDeps.Diff(p.Path, initialDeps)
+
+	return &diff
 }
 
 // ParseRequirementsTxt parses a requirements.txt file into a list of dependencies.

@@ -1,7 +1,5 @@
 package deps
 
-import "strings"
-
 type Dependency struct {
 	Name    string
 	URL     string
@@ -27,67 +25,78 @@ func (d Dependency) String() string {
 
 type Dependencies []Dependency
 
-func (d Dependencies) Diff(older Dependencies) string { //nolint:cyclop
-	// TODO: colorize?
-	// TODO: return the data, not a string?
-	uniqueCurrent := map[string]Dependency{}
+type UpdatedDependency struct {
+	Initial Dependency
+	Latest  Dependency
+}
+
+type UpdatedDependencies []UpdatedDependency
+
+type FileDiff struct {
+	Path                string
+	NewDependencies     Dependencies
+	DeletedDependencies Dependencies
+	UpdatedDependencies UpdatedDependencies
+}
+
+func (f FileDiff) IsEmpty() bool {
+	return len(f.NewDependencies) == 0 &&
+		len(f.DeletedDependencies) == 0 &&
+		len(f.UpdatedDependencies) == 0
+}
+
+type FileDiffs []FileDiff
+
+func (f FileDiffs) AllEmpty() bool {
+	for _, diff := range f {
+		if !diff.IsEmpty() {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (d Dependencies) Diff(name string, initial Dependencies) FileDiff {
+	uniqueLatest := map[string]Dependency{}
 	for _, dep := range d {
-		uniqueCurrent[dep.Package()] = dep
+		uniqueLatest[dep.Package()] = dep
 	}
 
-	uniqueOlder := map[string]Dependency{}
-	for _, dep := range older {
-		uniqueOlder[dep.Package()] = dep
+	uniqueInitial := map[string]Dependency{}
+	for _, dep := range initial {
+		uniqueInitial[dep.Package()] = dep
 	}
 
-	var added, removed, bumped []string
+	var (
+		added, removed Dependencies
+		bumped         UpdatedDependencies
+	)
 
 	// Find added and bumped packages
-	for pkg, currentDep := range uniqueCurrent {
-		olderDep, existed := uniqueOlder[pkg]
+	for pkg, latestDep := range uniqueLatest {
+		initialDep, existed := uniqueInitial[pkg]
 		if !existed {
-			added = append(added, currentDep.String())
-		} else if olderDep.Version != currentDep.Version {
-			bumped = append(bumped, pkg+": "+olderDep.Version+" => "+currentDep.Version)
+			added = append(added, latestDep)
+		} else if initialDep.Version != latestDep.Version {
+			bumped = append(bumped, UpdatedDependency{
+				Initial: initialDep,
+				Latest:  latestDep,
+			})
 		}
 	}
 
 	// Find removed packages
-	for pkg, olderDep := range uniqueOlder {
-		if _, exists := uniqueCurrent[pkg]; !exists {
-			removed = append(removed, olderDep.String())
+	for pkg, initialDep := range uniqueInitial {
+		if _, exists := uniqueLatest[pkg]; !exists {
+			removed = append(removed, initialDep)
 		}
 	}
 
-	if len(added) == 0 && len(removed) == 0 && len(bumped) == 0 {
-		return ""
+	return FileDiff{
+		Path:                name,
+		NewDependencies:     added,
+		DeletedDependencies: removed,
+		UpdatedDependencies: bumped,
 	}
-
-	builder := &strings.Builder{}
-
-	if len(added) > 0 {
-		builder.WriteString("  Added:\n")
-
-		for _, pkg := range added {
-			builder.WriteString("    + " + pkg + "\n")
-		}
-	}
-
-	if len(removed) > 0 {
-		builder.WriteString("  Removed:\n")
-
-		for _, pkg := range removed {
-			builder.WriteString("    - " + pkg + "\n")
-		}
-	}
-
-	if len(bumped) > 0 {
-		builder.WriteString("  Version changes:\n")
-
-		for _, pkg := range bumped {
-			builder.WriteString("    ~ " + pkg + "\n")
-		}
-	}
-
-	return builder.String()
 }
