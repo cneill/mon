@@ -24,14 +24,21 @@ go install github.com/cneill/mon@latest
     * NPM (package.json)
     * Python (requirements.txt / pyproject.toml)
 
-## Flags
+## Flags / Arguments
 
 ```
+USAGE:
+   mon [global options] [PROJECT_DIRECTORY]
+
 GLOBAL OPTIONS:
    --debug, -D     Write debug logs to a file (mon_debug.log) in current directory. [$MON_DEBUG]
-   --no-color, -C  Disable coloration. [$MON_NO_COLOR]
    --help, -h      show help
+   --no-color, -C  Disable coloration. [$MON_NO_COLOR]
    --version, -v   print the version
+
+   details
+
+   --all-files, -F  Show all new, deleted, and written file paths in final session stats. [$MON_SHOW_ALL_FILES]
 ```
 
 ## Screenshots
