@@ -318,42 +318,49 @@ func (s *statusSnapshot) listenersString() string {
 		}
 
 		builder.WriteString(labelColor.Sprint(listener + ":\n"))
+		builder.WriteString(s.listenerDependencyString(diff))
+	}
 
-		for _, fileDiff := range diff.DependencyFileDiffs {
-			if fileDiff.IsEmpty() {
-				continue
+	return builder.String()
+}
+
+func (s *statusSnapshot) listenerDependencyString(diff listeners.Diff) string {
+	builder := &strings.Builder{}
+
+	for _, fileDiff := range diff.DependencyFileDiffs {
+		if fileDiff.IsEmpty() {
+			continue
+		}
+
+		builder.WriteString(indent + sublabelColor.Sprint(fileDiff.Path) + ":\n")
+
+		if len(fileDiff.NewDependencies) > 0 {
+			for _, dep := range fileDiff.NewDependencies {
+				builder.WriteString(indent + indent)
+				builder.WriteString(addedColor.Sprint("+") + " ")
+				builder.WriteString(detailColor.Sprint(dep.String()))
+				builder.WriteRune('\n')
 			}
+		}
 
-			builder.WriteString(indent + sublabelColor.Sprint(fileDiff.Path) + ":\n")
-
-			if len(fileDiff.NewDependencies) > 0 {
-				for _, dep := range fileDiff.NewDependencies {
-					builder.WriteString(indent + indent)
-					builder.WriteString(addedColor.Sprint("+") + " ")
-					builder.WriteString(detailColor.Sprint(dep.String()))
-					builder.WriteRune('\n')
-				}
+		if len(fileDiff.DeletedDependencies) > 0 {
+			for _, dep := range fileDiff.DeletedDependencies {
+				builder.WriteString(indent + indent)
+				builder.WriteString(removedColor.Sprint("-") + " ")
+				builder.WriteString(detailColor.Sprint(dep.String()))
+				builder.WriteRune('\n')
 			}
+		}
 
-			if len(fileDiff.DeletedDependencies) > 0 {
-				for _, dep := range fileDiff.DeletedDependencies {
-					builder.WriteString(indent + indent)
-					builder.WriteString(removedColor.Sprint("-") + " ")
-					builder.WriteString(detailColor.Sprint(dep.String()))
-					builder.WriteRune('\n')
-				}
-			}
-
-			if len(fileDiff.UpdatedDependencies) > 0 {
-				for _, dep := range fileDiff.UpdatedDependencies {
-					builder.WriteString(indent + indent)
-					builder.WriteString(updatedColor.Sprint("~") + " ")
-					builder.WriteString(dep.Initial.Package() + separator)
-					builder.WriteString(removedColor.Sprint(dep.Initial.Version))
-					builder.WriteString(updatedColor.Sprint(" => "))
-					builder.WriteString(addedColor.Sprint(dep.Latest.Version))
-					builder.WriteRune('\n')
-				}
+		if len(fileDiff.UpdatedDependencies) > 0 {
+			for _, dep := range fileDiff.UpdatedDependencies {
+				builder.WriteString(indent + indent)
+				builder.WriteString(updatedColor.Sprint("~") + " ")
+				builder.WriteString(dep.Initial.Package() + separator)
+				builder.WriteString(removedColor.Sprint(dep.Initial.Version))
+				builder.WriteString(updatedColor.Sprint(" => "))
+				builder.WriteString(addedColor.Sprint(dep.Latest.Version))
+				builder.WriteRune('\n')
 			}
 		}
 	}
