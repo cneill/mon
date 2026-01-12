@@ -43,6 +43,7 @@ func (l *Listener) LogEvent(event listeners.Event) error {
 			l.modFiles = append(l.modFiles, &ModFile{
 				Path:           event.Name,
 				InitialContent: event.Content,
+				LatestContent:  event.Content,
 			})
 			l.mutex.Unlock()
 		}

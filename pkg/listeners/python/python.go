@@ -99,6 +99,7 @@ func (l *Listener) handleRequirementsTxt(event listeners.Event) error {
 		l.requirementsFiles = append(l.requirementsFiles, &RequirementsFile{
 			Path:           event.Name,
 			InitialContent: event.Content,
+			LatestContent:  event.Content,
 		})
 
 	case listeners.EventWrite:
@@ -123,6 +124,7 @@ func (l *Listener) handlePyProjectToml(event listeners.Event) error {
 		l.pyprojectFiles = append(l.pyprojectFiles, &PyProjectFile{
 			Path:           event.Name,
 			InitialContent: event.Content,
+			LatestContent:  event.Content,
 		})
 	case listeners.EventWrite:
 		for _, pyFile := range l.pyprojectFiles {
