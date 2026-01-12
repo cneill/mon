@@ -70,6 +70,10 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 			npm.New(),
 			python.New(),
 		},
+
+		DetailsOpts: &mon.DetailsOpts{
+			ShowAllFiles: cmd.Bool(FlagShowAllFiles),
+		},
 	}
 
 	mon, err := mon.New(opts) //nolint:contextcheck

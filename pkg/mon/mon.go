@@ -20,6 +20,8 @@ type Opts struct {
 	NoColor    bool
 	ProjectDir string
 	Listeners  []listeners.Listener
+
+	DetailsOpts *DetailsOpts
 }
 
 func (o *Opts) OK() error {
@@ -31,7 +33,15 @@ func (o *Opts) OK() error {
 		return fmt.Errorf("failed to stat project dir: %w", err)
 	}
 
+	if o.DetailsOpts == nil {
+		return fmt.Errorf("must supply details options")
+	}
+
 	return nil
+}
+
+type DetailsOpts struct {
+	ShowAllFiles bool
 }
 
 type Mon struct {

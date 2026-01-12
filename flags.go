@@ -5,6 +5,7 @@ import "github.com/urfave/cli/v3"
 func allFlags() []cli.Flag {
 	flags := make([]cli.Flag, 0, len(generalFlags()))
 	flags = append(flags, generalFlags()...)
+	flags = append(flags, detailsFlags()...)
 
 	return flags
 }
@@ -31,6 +32,26 @@ func generalFlags() []cli.Flag {
 			Sources: cli.EnvVars(EnvNoColor),
 			Value:   false,
 			Usage:   "Disable coloration.",
+		},
+	}
+}
+
+const (
+	FlagShowAllFiles = "all-files"
+	EnvShowAllFiles  = "MON_SHOW_ALL_FILES"
+)
+
+func detailsFlags() []cli.Flag {
+	category := "details"
+
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:     FlagShowAllFiles,
+			Category: category,
+			Aliases:  []string{"F"},
+			Sources:  cli.EnvVars(EnvShowAllFiles),
+			Value:    false,
+			Usage:    "Show all new, deleted, and written file paths in final session stats.",
 		},
 	}
 }

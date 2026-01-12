@@ -58,6 +58,8 @@ func (m *Mon) triggerDisplay() {
 }
 
 type statusSnapshot struct {
+	*DetailsOpts
+
 	NumFilesCreated string
 	NumFilesDeleted string
 	NewFiles        []string
@@ -83,8 +85,11 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 	slices.Sort(fileStats.DeletedFiles)
 
 	gitStats := m.gitMonitor.Stats(final)
+	slices.Reverse(gitStats.Commits)
 
 	snapshot := &statusSnapshot{
+		DetailsOpts: m.DetailsOpts,
+
 		NumFilesCreated: strconv.FormatInt(fileStats.NumFilesCreated, 10),
 		NumFilesDeleted: strconv.FormatInt(fileStats.NumFilesDeleted, 10),
 		NewFiles:        fileStats.NewFiles,
@@ -185,7 +190,10 @@ func (s *statusSnapshot) Final() string {
 		builder.WriteRune('\n')
 	}
 
-	builder.WriteString(s.filesString())
+	if s.ShowAllFiles {
+		builder.WriteString(s.filesString())
+	}
+
 	builder.WriteString(s.patchString())
 	builder.WriteString(s.commitsString())
 	builder.WriteString(s.listenersString())

@@ -2,7 +2,6 @@ package git
 
 import (
 	"log/slog"
-	"slices"
 
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -33,8 +32,6 @@ func (m *Monitor) Stats(final bool) *Stats {
 		if err != nil {
 			slog.Error("failed to collect commits since initial hash", "initial_hash", m.initialHash, "error", err)
 		}
-
-		slices.Reverse(commits)
 
 		stats.Commits = commits
 
