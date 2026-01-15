@@ -45,9 +45,9 @@ func (m *Mon) displayLoop(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		snapshot := m.getStatusSnapshot(false)
+		snapshot := m.GetStatusSnapshot(false)
 
-		fmt.Printf("%s%s", clearLine, snapshot.String())
+		fmt.Printf("%s%s", clearLine, snapshot.Live())
 		os.Stdout.Sync()
 	}
 }
@@ -59,29 +59,29 @@ func (m *Mon) triggerDisplay() {
 	}
 }
 
-type statusSnapshot struct {
+type StatusSnapshot struct {
 	*DetailsOpts
 
-	NumFilesCreated string
-	NumFilesDeleted string
-	NewFiles        []string
-	DeletedFiles    []string
-	WrittenFiles    map[string]int64
+	NumFilesCreated int64            `json:"num_files_created"`
+	NumFilesDeleted int64            `json:"num_files_deleted"`
+	NewFiles        []string         `json:"new_file_paths"`
+	DeletedFiles    []string         `json:"deleted_file_paths"`
+	WrittenFiles    map[string]int64 `json:"file_writes"`
 
-	NumCommits      string
-	LinesAdded      string
-	LinesDeleted    string
-	UnstagedChanges string
-	Commits         []*object.Commit
-	Patch           *object.Patch
+	NumCommits      int64            `json:"num_commits"`
+	LinesAdded      int64            `json:"lines_added"`
+	LinesDeleted    int64            `json:"lines_deleted"`
+	UnstagedChanges int64            `json:"unstaged_changes"`
+	Commits         []*object.Commit `json:"-"`
+	Patch           *object.Patch    `json:"-"`
 
-	StartTime time.Time
-	LastWrite time.Time
+	StartTime time.Time `json:"start_time"`
+	LastWrite time.Time `json:"last_write"`
 
-	ListenerDiffs map[string]listeners.Diff
+	ListenerDiffs map[string]listeners.Diff `json:"-"`
 }
 
-func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
+func (m *Mon) GetStatusSnapshot(final bool) *StatusSnapshot {
 	fileStats := m.fileMonitor.Stats(final)
 	slices.Sort(fileStats.NewFiles)
 	slices.Sort(fileStats.DeletedFiles)
@@ -89,19 +89,19 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 	gitStats := m.gitMonitor.Stats(final)
 	slices.Reverse(gitStats.Commits)
 
-	snapshot := &statusSnapshot{
+	snapshot := &StatusSnapshot{
 		DetailsOpts: m.DetailsOpts,
 
-		NumFilesCreated: strconv.FormatInt(fileStats.NumFilesCreated, 10),
-		NumFilesDeleted: strconv.FormatInt(fileStats.NumFilesDeleted, 10),
+		NumFilesCreated: fileStats.NumFilesCreated,
+		NumFilesDeleted: fileStats.NumFilesDeleted,
 		NewFiles:        fileStats.NewFiles,
 		DeletedFiles:    fileStats.DeletedFiles,
 		WrittenFiles:    fileStats.WrittenFiles,
 
-		NumCommits:      strconv.FormatInt(gitStats.NumCommits, 10),
-		LinesAdded:      strconv.FormatInt(gitStats.LinesAdded, 10),
-		LinesDeleted:    strconv.FormatInt(gitStats.LinesDeleted, 10),
-		UnstagedChanges: strconv.FormatInt(gitStats.UnstagedChanges, 10),
+		NumCommits:      gitStats.NumCommits,
+		LinesAdded:      gitStats.LinesAdded,
+		LinesDeleted:    gitStats.LinesDeleted,
+		UnstagedChanges: gitStats.UnstagedChanges,
 		Commits:         gitStats.Commits,
 		Patch:           gitStats.Patch,
 
@@ -120,24 +120,24 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 	return snapshot
 }
 
-func (s *statusSnapshot) String() string {
+func (s *StatusSnapshot) Live() string {
 	builder := &strings.Builder{}
 	builder.Grow(64)
 
 	builder.WriteString(labelColor.Sprint("[F] "))
-	builder.WriteString(addedColor.Sprint("+" + s.NumFilesCreated))
+	builder.WriteString(addedColor.Sprint("+" + strconv.FormatInt(s.NumFilesCreated, 10)))
 	builder.WriteString(" / ")
-	builder.WriteString(removedColor.Sprint("-" + s.NumFilesDeleted))
+	builder.WriteString(removedColor.Sprint("-" + strconv.FormatInt(s.NumFilesDeleted, 10)))
 	builder.WriteString(separator)
 	builder.WriteString(labelColor.Sprint("[L] "))
-	builder.WriteString(addedColor.Sprint("+" + s.LinesAdded))
+	builder.WriteString(addedColor.Sprint("+" + strconv.FormatInt(s.LinesAdded, 10)))
 	builder.WriteString(" / ")
-	builder.WriteString(removedColor.Sprint("-" + s.LinesDeleted))
+	builder.WriteString(removedColor.Sprint("-" + strconv.FormatInt(s.LinesDeleted, 10)))
 	builder.WriteString(separator)
 	builder.WriteString(labelColor.Sprint("[C] "))
 	builder.WriteString(addedColor.Sprint(s.NumCommits))
 
-	if s.UnstagedChanges != "0" {
+	if s.UnstagedChanges > 0 {
 		builder.WriteString(separator)
 		builder.WriteString(labelColor.Sprint("[!] "))
 		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
@@ -152,7 +152,7 @@ func (s *statusSnapshot) String() string {
 	return builder.String()
 }
 
-func (s *statusSnapshot) Final() string {
+func (s *StatusSnapshot) Final() string {
 	builder := &strings.Builder{}
 	builder.Grow(64)
 
@@ -165,9 +165,9 @@ func (s *statusSnapshot) Final() string {
 
 	builder.WriteString(indent)
 	builder.WriteString(sublabelColor.Sprint("Files: "))
-	builder.WriteString(addedColor.Sprint(s.NumFilesCreated + " created"))
+	builder.WriteString(addedColor.Sprint(strconv.FormatInt(s.NumFilesCreated, 10) + " created"))
 	builder.WriteString(separator)
-	builder.WriteString(removedColor.Sprint(s.NumFilesDeleted + " deleted"))
+	builder.WriteString(removedColor.Sprint(strconv.FormatInt(s.NumFilesDeleted, 10) + " deleted"))
 	builder.WriteRune('\n')
 
 	builder.WriteString(indent)
@@ -177,12 +177,12 @@ func (s *statusSnapshot) Final() string {
 
 	builder.WriteString(indent)
 	builder.WriteString(sublabelColor.Sprint("Lines: "))
-	builder.WriteString(addedColor.Sprint(s.LinesAdded + " added"))
+	builder.WriteString(addedColor.Sprint(strconv.FormatInt(s.LinesAdded, 10) + " added"))
 	builder.WriteString(separator)
-	builder.WriteString(removedColor.Sprint(s.LinesDeleted + " deleted"))
+	builder.WriteString(removedColor.Sprint(strconv.FormatInt(s.LinesDeleted, 10) + " deleted"))
 	builder.WriteRune('\n')
 
-	if s.UnstagedChanges != "0" {
+	if s.UnstagedChanges > 0 {
 		builder.WriteString(indent)
 		builder.WriteString(sublabelColor.Sprint("Unstaged file changes: "))
 		builder.WriteString(addedColor.Sprint(s.UnstagedChanges))
@@ -200,7 +200,7 @@ func (s *statusSnapshot) Final() string {
 	return builder.String()
 }
 
-func (s *statusSnapshot) filesString() string {
+func (s *StatusSnapshot) filesString() string {
 	builder := &strings.Builder{}
 	builder.Grow(256)
 
@@ -235,8 +235,8 @@ func (s *statusSnapshot) filesString() string {
 	return builder.String()
 }
 
-func (s *statusSnapshot) patchString() string {
-	if s.Patch == nil || s.NumCommits == "0" {
+func (s *StatusSnapshot) patchString() string {
+	if s.Patch == nil || s.NumCommits == 0 {
 		return ""
 	}
 
@@ -283,7 +283,7 @@ func (s *statusSnapshot) patchString() string {
 	return builder.String()
 }
 
-func (s *statusSnapshot) commitsString() string {
+func (s *StatusSnapshot) commitsString() string {
 	if s.Commits == nil {
 		return ""
 	}
@@ -312,7 +312,7 @@ func (s *statusSnapshot) commitsString() string {
 	return builder.String()
 }
 
-func (s *statusSnapshot) listenersString() string {
+func (s *StatusSnapshot) listenersString() string {
 	builder := &strings.Builder{}
 	builder.Grow(128)
 
@@ -328,7 +328,7 @@ func (s *statusSnapshot) listenersString() string {
 	return builder.String()
 }
 
-func (s *statusSnapshot) listenerDependencyString(diff listeners.Diff) string {
+func (s *StatusSnapshot) listenerDependencyString(diff listeners.Diff) string {
 	builder := &strings.Builder{}
 	builder.Grow(64)
 

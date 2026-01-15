@@ -130,7 +130,7 @@ func (m *Mon) Run(ctx context.Context) error {
 
 	cancel() // Cancel context first so goroutines can exit before Close() waits on them
 
-	snapshot := m.getStatusSnapshot(true)
+	snapshot := m.GetStatusSnapshot(true)
 	fmt.Println(clearLine + snapshot.Final())
 
 	return nil
