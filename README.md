@@ -2,9 +2,9 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/cneill/mon)](https://goreportcard.com/report/github.com/cneill/mon) [![Go package documentation](https://pkg.go.dev/badge/github.com/cneill/mon)](https://pkg.go.dev/github.com/cneill/mon)
 
-![Final status](img/final_status.png)
-
 Monitor what AI coding agents are actually doing to your codebase.
+
+![Final status](img/final_status.png)
 
 ## What is this?
 
