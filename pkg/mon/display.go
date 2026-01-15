@@ -122,7 +122,7 @@ func (m *Mon) getStatusSnapshot(final bool) *statusSnapshot {
 
 func (s *statusSnapshot) String() string {
 	builder := &strings.Builder{}
-	builder.Grow(50)
+	builder.Grow(64)
 
 	builder.WriteString(labelColor.Sprint("[F] "))
 	builder.WriteString(addedColor.Sprint("+" + s.NumFilesCreated))
@@ -154,7 +154,7 @@ func (s *statusSnapshot) String() string {
 
 func (s *statusSnapshot) Final() string {
 	builder := &strings.Builder{}
-	builder.Grow(50)
+	builder.Grow(64)
 
 	builder.WriteString(labelColor.Sprint("Session stats:\n"))
 
@@ -202,6 +202,7 @@ func (s *statusSnapshot) Final() string {
 
 func (s *statusSnapshot) filesString() string {
 	builder := &strings.Builder{}
+	builder.Grow(256)
 
 	if len(s.NewFiles) > 0 {
 		builder.WriteString(labelColor.Sprint("\nNew files:\n"))
@@ -253,6 +254,7 @@ func (s *statusSnapshot) patchString() string {
 	stats := s.Patch.Stats()
 
 	builder := &strings.Builder{}
+	builder.Grow(256)
 	builder.WriteString(labelColor.Sprint("\nPatch stats:\n"))
 
 	for _, fileStats := range stats {
@@ -287,6 +289,7 @@ func (s *statusSnapshot) commitsString() string {
 	}
 
 	builder := &strings.Builder{}
+	builder.Grow(256)
 	builder.WriteString(labelColor.Sprint("\nCommits:\n"))
 
 	for _, commit := range s.Commits {
@@ -311,6 +314,7 @@ func (s *statusSnapshot) commitsString() string {
 
 func (s *statusSnapshot) listenersString() string {
 	builder := &strings.Builder{}
+	builder.Grow(128)
 
 	for listener, diff := range s.ListenerDiffs {
 		if diff.IsEmpty() {
@@ -326,6 +330,7 @@ func (s *statusSnapshot) listenersString() string {
 
 func (s *statusSnapshot) listenerDependencyString(diff listeners.Diff) string {
 	builder := &strings.Builder{}
+	builder.Grow(64)
 
 	for _, fileDiff := range diff.DependencyFileDiffs {
 		if fileDiff.IsEmpty() {
