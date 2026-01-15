@@ -1,6 +1,14 @@
 # mon
 
-What are those coding agents up to, after all?
+![Final status](img/final_status.png)
+
+Monitor what AI coding agents are actually doing to your codebase.
+
+## What is this?
+
+`mon` watches your project directory in real time and tracks file changes, git commits, and dependency modifications
+while AI coding agents (Claude, Cursor, Copilot, etc.) work on your code. When you're done, it gives you a summary of
+everything that changed.
 
 ## Installation
 
@@ -12,34 +20,36 @@ go install github.com/cneill/mon@latest
 
 [**Or grab the latest release**](https://github.com/cneill/mon/releases/latest)
 
-## Stats tracked
+## Usage
 
-* Files created/deleted
-* Lines added/deleted in git commits
-* Git commits
-* Untracked changes
-* File write counts
-* Dependencies added/deleted/modified
-    * Golang (go.mod)
-    * NPM (package.json)
-    * Python (requirements.txt / pyproject.toml)
+Run `mon` in your project directory before starting your AI coding session:
 
-## Flags / Arguments
-
+```bash
+mon /path/to/project
 ```
-USAGE:
-   mon [global options] [PROJECT_DIRECTORY]
 
-GLOBAL OPTIONS:
-   --debug, -D     Write debug logs to a file (mon_debug.log) in current directory. [$MON_DEBUG]
-   --help, -h      show help
-   --no-color, -C  Disable coloration. [$MON_NO_COLOR]
-   --version, -v   print the version
+Or from within the project:
 
-   details
-
-   --all-files, -F  Show all new, deleted, and written file paths in final session stats. [$MON_SHOW_ALL_FILES]
+```bash
+cd /path/to/project
+mon .
 ```
+
+Press `Ctrl+C` when done to see the session summary.
+
+## What it tracks
+
+| Category | Details |
+|----------|---------|
+| **Files** | Created, deleted, and write counts |
+| **Git** | Commits, lines added/deleted, untracked changes |
+| **Dependencies** | Added, removed, and version changes |
+
+### Supported dependency files
+
+- **Go** - `go.mod`
+- **Node.js** - `package.json`
+- **Python** - `requirements.txt`, `pyproject.toml`
 
 ## Screenshots
 
@@ -47,6 +57,16 @@ GLOBAL OPTIONS:
 
 ![Status line](img/status_line.png)
 
-**On exit:**
+**Session summary (on exit):**
 
 ![Final status](img/final_status.png)
+
+## Flags
+
+```
+--debug, -D      Write debug logs to mon_debug.log
+--no-color, -C   Disable colored output
+--all-files, -F  Show all file paths in final stats
+--help, -h       Show help
+--version, -v    Print version
+```
