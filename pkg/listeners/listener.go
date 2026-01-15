@@ -31,3 +31,45 @@ type Diff struct {
 func (d Diff) IsEmpty() bool {
 	return d.DependencyFileDiffs.AllEmpty()
 }
+
+type DiffMap map[string]Diff
+
+func (d DiffMap) IsEmpty() bool {
+	for _, diff := range d {
+		if !diff.IsEmpty() {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (d DiffMap) NumNewDependencies() int64 {
+	var result int64
+
+	for _, diff := range d {
+		result += diff.DependencyFileDiffs.NumNewDependencies()
+	}
+
+	return result
+}
+
+func (d DiffMap) NumDeletedDependencies() int64 {
+	var result int64
+
+	for _, diff := range d {
+		result += diff.DependencyFileDiffs.NumDeletedDependencies()
+	}
+
+	return result
+}
+
+func (d DiffMap) NumUpdatedDependencies() int64 {
+	var result int64
+
+	for _, diff := range d {
+		result += diff.DependencyFileDiffs.NumUpdatedDependencies()
+	}
+
+	return result
+}

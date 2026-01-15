@@ -31,7 +31,8 @@ var (
 )
 
 func (m *Mon) displayLoop(ctx context.Context) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(time.Second)
+	depTicker := time.NewTicker(time.Second * 5) // update dependencies at most every 5 seconds
 	defer ticker.Stop()
 
 	for {
@@ -45,7 +46,14 @@ func (m *Mon) displayLoop(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		snapshot := m.GetStatusSnapshot(false)
+		deps := false
+		select {
+		case <-depTicker.C:
+			deps = true
+		default:
+		}
+
+		snapshot := m.GetStatusSnapshot(deps, false)
 
 		fmt.Printf("%s%s", clearLine, snapshot.Live())
 		os.Stdout.Sync()
@@ -78,10 +86,10 @@ type StatusSnapshot struct {
 	StartTime time.Time `json:"start_time"`
 	LastWrite time.Time `json:"last_write"`
 
-	ListenerDiffs map[string]listeners.Diff `json:"-"`
+	ListenerDiffs listeners.DiffMap `json:"-"`
 }
 
-func (m *Mon) GetStatusSnapshot(final bool) *StatusSnapshot {
+func (m *Mon) GetStatusSnapshot(packages, final bool) *StatusSnapshot {
 	fileStats := m.fileMonitor.Stats(final)
 	slices.Sort(fileStats.NewFiles)
 	slices.Sort(fileStats.DeletedFiles)
@@ -108,13 +116,17 @@ func (m *Mon) GetStatusSnapshot(final bool) *StatusSnapshot {
 		StartTime: m.startTime,
 		LastWrite: m.lastWrite,
 
-		ListenerDiffs: map[string]listeners.Diff{},
+		ListenerDiffs: listeners.DiffMap{},
 	}
 
-	if final {
+	if packages || final {
 		for _, listener := range m.listeners {
 			snapshot.ListenerDiffs[listener.Name()] = listener.Diff()
 		}
+
+		m.listenerDiffsCached = snapshot.ListenerDiffs
+	} else {
+		snapshot.ListenerDiffs = m.listenerDiffsCached
 	}
 
 	return snapshot
@@ -136,6 +148,16 @@ func (s *StatusSnapshot) Live() string {
 	builder.WriteString(separator)
 	builder.WriteString(labelColor.Sprint("[C] "))
 	builder.WriteString(addedColor.Sprint(s.NumCommits))
+
+	if !s.ListenerDiffs.IsEmpty() {
+		builder.WriteString(separator)
+		builder.WriteString(labelColor.Sprint("[D] "))
+		builder.WriteString(addedColor.Sprint("+" + strconv.FormatInt(s.ListenerDiffs.NumNewDependencies(), 10)))
+		builder.WriteString(" / ")
+		builder.WriteString(removedColor.Sprint("-" + strconv.FormatInt(s.ListenerDiffs.NumDeletedDependencies(), 10)))
+		builder.WriteString(" / ")
+		builder.WriteString(updatedColor.Sprint("~" + strconv.FormatInt(s.ListenerDiffs.NumUpdatedDependencies(), 10)))
+	}
 
 	if s.UnstagedChanges > 0 {
 		builder.WriteString(separator)
@@ -361,7 +383,7 @@ func (s *StatusSnapshot) listenerDependencyString(diff listeners.Diff) string {
 			for _, dep := range fileDiff.UpdatedDependencies {
 				builder.WriteString(indent + indent)
 				builder.WriteString(updatedColor.Sprint("~") + " ")
-				builder.WriteString(dep.Initial.Package() + separator)
+				builder.WriteString(detailColor.Sprint(dep.Initial.Package()) + separator)
 				builder.WriteString(removedColor.Sprint(dep.Initial.Version))
 				builder.WriteString(updatedColor.Sprint(" => "))
 				builder.WriteString(addedColor.Sprint(dep.Latest.Version))

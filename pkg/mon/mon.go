@@ -55,7 +55,8 @@ type Mon struct {
 	startTime   time.Time
 	lastWrite   time.Time
 
-	listeners map[string]listeners.Listener
+	listeners           map[string]listeners.Listener
+	listenerDiffsCached map[string]listeners.Diff
 }
 
 func New(opts *Opts) (*Mon, error) {
@@ -92,7 +93,8 @@ func New(opts *Opts) (*Mon, error) {
 		startTime:   time.Now(),
 		displayChan: make(chan struct{}),
 
-		listeners: map[string]listeners.Listener{},
+		listeners:           map[string]listeners.Listener{},
+		listenerDiffsCached: listeners.DiffMap{},
 	}
 
 	if err := mon.setupListeners(); err != nil {
@@ -130,7 +132,7 @@ func (m *Mon) Run(ctx context.Context) error {
 
 	cancel() // Cancel context first so goroutines can exit before Close() waits on them
 
-	snapshot := m.GetStatusSnapshot(true)
+	snapshot := m.GetStatusSnapshot(true, true)
 	fmt.Println(clearLine + snapshot.Final())
 
 	return nil

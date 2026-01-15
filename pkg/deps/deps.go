@@ -45,6 +45,18 @@ func (f FileDiff) IsEmpty() bool {
 		len(f.UpdatedDependencies) == 0
 }
 
+func (f FileDiff) NumNewDependencies() int64 {
+	return int64(len(f.NewDependencies))
+}
+
+func (f FileDiff) NumDeletedDependencies() int64 {
+	return int64(len(f.DeletedDependencies))
+}
+
+func (f FileDiff) NumUpdatedDependencies() int64 {
+	return int64(len(f.UpdatedDependencies))
+}
+
 type FileDiffs []FileDiff
 
 func (f FileDiffs) AllEmpty() bool {
@@ -55,6 +67,36 @@ func (f FileDiffs) AllEmpty() bool {
 	}
 
 	return true
+}
+
+func (f FileDiffs) NumNewDependencies() int64 {
+	var result int64
+
+	for _, diff := range f {
+		result += diff.NumNewDependencies()
+	}
+
+	return result
+}
+
+func (f FileDiffs) NumDeletedDependencies() int64 {
+	var result int64
+
+	for _, diff := range f {
+		result += diff.NumDeletedDependencies()
+	}
+
+	return result
+}
+
+func (f FileDiffs) NumUpdatedDependencies() int64 {
+	var result int64
+
+	for _, diff := range f {
+		result += diff.NumUpdatedDependencies()
+	}
+
+	return result
 }
 
 func (d Dependencies) Diff(name string, initial Dependencies) FileDiff {
