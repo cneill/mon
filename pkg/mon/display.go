@@ -32,8 +32,10 @@ var (
 
 func (m *Mon) displayLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
-	depTicker := time.NewTicker(time.Second * 5) // update dependencies at most every 5 seconds
 	defer ticker.Stop()
+
+	depTicker := time.NewTicker(time.Second * 5) // update dependencies at most every 5 seconds
+	defer depTicker.Stop()
 
 	for {
 		select {
@@ -46,14 +48,15 @@ func (m *Mon) displayLoop(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		deps := false
+		updateDeps := false
+
 		select {
 		case <-depTicker.C:
-			deps = true
+			updateDeps = true
 		default:
 		}
 
-		snapshot := m.GetStatusSnapshot(deps, false)
+		snapshot := m.GetStatusSnapshot(updateDeps, false)
 
 		fmt.Printf("%s%s", clearLine, snapshot.Live())
 		os.Stdout.Sync()
