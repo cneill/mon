@@ -400,9 +400,18 @@ func (s *StatusSnapshot) listenerDependencyString(diff listeners.Diff) string {
 
 func durationString(duration time.Duration) string {
 	result := ""
-	hours := int64(duration / time.Hour)
-	minutes := int64((duration - (time.Duration(hours) * time.Hour)) / time.Minute)
-	seconds := int64((duration - (time.Duration(hours) * time.Hour) - (time.Duration(minutes) * time.Minute)) / time.Second)
+	days := int64(duration / (time.Hour * 24))
+	hours := int64((duration - (time.Duration(days) * time.Hour * 24)) / time.Hour)
+	minutes := int64((duration - (time.Duration(days) * time.Hour * 24) - (time.Duration(hours) * time.Hour)) / time.Minute)
+	seconds := int64(
+		(duration - (time.Duration(days) * time.Hour * 24) -
+			(time.Duration(hours) * time.Hour) -
+			(time.Duration(minutes) * time.Minute)) / time.Second,
+	)
+
+	if days > 0 {
+		result += strconv.FormatInt(days, 10) + "d"
+	}
 
 	if hours > 0 {
 		result += strconv.FormatInt(hours, 10) + "h"
