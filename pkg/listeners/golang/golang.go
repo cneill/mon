@@ -112,13 +112,17 @@ func ParseDeps(modFilePath string, modFileContents []byte) (deps.Dependencies, e
 		return nil, fmt.Errorf("failed to parse go.mod file %q: %w", modFilePath, err)
 	}
 
-	results := make(deps.Dependencies, len(parsedFile.Require))
-	for i, require := range parsedFile.Require {
-		results[i] = deps.Dependency{
+	results := make(deps.Dependencies, 0, len(parsedFile.Require))
+	for _, require := range parsedFile.Require {
+		if require.Indirect {
+			continue
+		}
+
+		results = append(results, deps.Dependency{
 			Name:    "",
 			URL:     require.Mod.Path,
 			Version: require.Mod.Version,
-		}
+		})
 	}
 
 	return results, nil
