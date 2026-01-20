@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 	"github.com/cneill/mon/pkg/listeners/npm"
 	"github.com/cneill/mon/pkg/listeners/python"
 	"github.com/cneill/mon/pkg/mon"
+	"github.com/cneill/mon/pkg/proc"
 	"github.com/fatih/color"
 )
 
@@ -116,7 +116,14 @@ func setupLogging(cmd *cli.Command) (*os.File, error) {
 }
 
 func main() {
-	if err := run(context.Background()); err != nil {
-		log.Fatalf("ERROR: %v", err)
-	}
+	// if err := run(context.Background()); err != nil {
+	// 	log.Fatalf("ERROR: %v", err)
+	// }
+
+	projectDir, _ := filepath.Abs(".")
+
+	procmon, _ := proc.NewMonitor(&proc.MonitorOpts{
+		ProjectDir: projectDir,
+	})
+	procmon.Run(context.TODO())
 }
