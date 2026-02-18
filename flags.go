@@ -1,6 +1,9 @@
 package main
 
-import "github.com/urfave/cli/v3"
+import (
+	"github.com/cneill/mon/internal/config"
+	"github.com/urfave/cli/v3"
+)
 
 func allFlags() []cli.Flag {
 	flags := make([]cli.Flag, 0, len(generalFlags()))
@@ -11,6 +14,8 @@ func allFlags() []cli.Flag {
 }
 
 const (
+	FlagConfig  = "config"
+	EnvConfig   = "MON_CONFIG"
 	FlagDebug   = "debug"
 	EnvDebug    = "MON_DEBUG"
 	FlagNoColor = "no-color"
@@ -19,6 +24,13 @@ const (
 
 func generalFlags() []cli.Flag {
 	return []cli.Flag{
+		&cli.StringFlag{
+			Name:    FlagConfig,
+			Aliases: []string{"c"},
+			Sources: cli.EnvVars(EnvConfig),
+			Value:   config.DefaultConfigPath(),
+			Usage:   "Path to the mon configuration file.",
+		},
 		&cli.BoolFlag{
 			Name:    FlagDebug,
 			Aliases: []string{"D"},

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cneill/mon/pkg/audio"
 	"github.com/cneill/mon/pkg/files"
 	"github.com/cneill/mon/pkg/git"
 	"github.com/cneill/mon/pkg/listeners"
@@ -49,6 +50,7 @@ type Mon struct {
 
 	fileMonitor  *files.Monitor
 	gitMonitor   *git.Monitor
+	audioManager *audio.Manager
 	writeLimiter *rate.Limiter
 
 	displayChan chan struct{}
@@ -83,12 +85,19 @@ func New(opts *Opts) (*Mon, error) {
 	// Get initial unstaged changes count
 	gitMonitor.Update(context.Background())
 
+	// TODO: supply audio manager options
+	audioManager, err := audio.NewManager(&audio.ManagerOpts{})
+	if err != nil {
+		slog.Error("failed to set up audio manager", "error", err)
+	}
+
 	mon := &Mon{
 		Opts: opts,
 
-		writeLimiter: rate.NewLimiter(3, 1),
 		fileMonitor:  fileMonitor,
 		gitMonitor:   gitMonitor,
+		writeLimiter: rate.NewLimiter(3, 1),
+		audioManager: audioManager,
 
 		startTime:   time.Now(),
 		displayChan: make(chan struct{}),

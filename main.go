@@ -3,16 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/cneill/mon/internal/audio"
 	"github.com/cneill/mon/internal/version"
 	"github.com/cneill/mon/pkg/listeners"
 	"github.com/cneill/mon/pkg/listeners/golang"
@@ -117,29 +116,29 @@ func setupLogging(cmd *cli.Command) (*os.File, error) {
 }
 
 func main() {
-	// if err := run(context.Background()); err != nil {
-	// 	log.Fatalf("ERROR: %v", err)
+	if err := run(context.Background()); err != nil {
+		log.Fatalf("ERROR: %v", err)
+	}
+
+	// mgr, err := audio.NewManager()
+	// if err != nil {
+	// 	panic(err)
 	// }
-
-	mgr, err := audio.NewManager()
-	if err != nil {
-		panic(err)
-	}
-
-	defer mgr.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	if err := mgr.PlaySound(ctx, "protoss_upgrade_complete.wav"); err != nil {
-		panic(err)
-	}
-
-	if err := mgr.PlaySound(ctx, "terran_upgrade_complete.wav"); err != nil {
-		panic(err)
-	}
-
-	if err := mgr.PlaySound(ctx, "terran_upgrade_complete.wav"); err != nil {
-		panic(err)
-	}
+	//
+	// defer mgr.Close()
+	//
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	// defer cancel()
+	//
+	// if err := mgr.PlaySound(ctx, "protoss_upgrade_complete.wav"); err != nil {
+	// 	panic(err)
+	// }
+	//
+	// if err := mgr.PlaySound(ctx, "terran_upgrade_complete.wav"); err != nil {
+	// 	panic(err)
+	// }
+	//
+	// if err := mgr.PlaySound(ctx, "terran_upgrade_complete.wav"); err != nil {
+	// 	panic(err)
+	// }
 }

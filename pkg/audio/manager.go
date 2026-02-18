@@ -3,11 +3,14 @@ package audio
 import (
 	"bytes"
 	"context"
+	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,15 +21,61 @@ import (
 	"github.com/gopxl/beep/v2/wav"
 )
 
-type Manager struct {
-	mutex    sync.RWMutex
-	soundMap map[string]Sound
-	// TODO: hookMap
+//go:embed assets/*.wav
+var builtinAssets embed.FS
+
+var ErrSoundNotFound = errors.New("sound not found")
+
+type ManagerOpts struct {
+	HookMap map[string]string
 }
 
-func NewManager() (*Manager, error) {
+func (m *ManagerOpts) OK() error {
+	if m.HookMap == nil {
+		return nil
+	}
+
+	errors := []string{}
+
+	for eventType, path := range m.HookMap {
+		if !ValidEventType(EventType(eventType)) {
+			errors = append(errors, "unknown event type: "+eventType)
+		}
+
+		stat, err := os.Stat(path)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("failed to stat audio file %s: %v", path, err))
+			continue
+		}
+
+		if !stat.Mode().IsRegular() {
+			errors = append(errors, fmt.Sprintf("file %s is not a regular file", path))
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("options error: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
+}
+
+type Manager struct {
+	soundMutex sync.RWMutex
+	soundMap   map[string]*Sound
+
+	hookMutex sync.RWMutex
+	hookMap   map[EventType]string // value = sound name
+}
+
+func NewManager(opts *ManagerOpts) (*Manager, error) {
+	if err := opts.OK(); err != nil {
+		return nil, fmt.Errorf("invalid audio manager options: %w", err)
+	}
+
 	mgr := &Manager{
-		soundMap: map[string]Sound{},
+		soundMap: map[string]*Sound{},
+		hookMap:  map[EventType]string{},
 	}
 
 	if err := mgr.loadBuiltins(); err != nil {
@@ -36,6 +85,7 @@ func NewManager() (*Manager, error) {
 	return mgr, nil
 }
 
+// AddSound takes the path to a sound and stores it for use by the Manager based on event hooks.
 func (m *Manager) AddSound(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -56,16 +106,41 @@ func (m *Manager) AddSound(path string) error {
 	return nil
 }
 
-func (m *Manager) PlaySound(ctx context.Context, name string) error {
-	m.mutex.RLock()
+// AddEventHook takes the 'name' of a sound (the filename, not the full path), and configures Manager to play it
+// whenever an event of 'eventType' is received.
+func (m *Manager) AddEventHook(name string, eventType EventType) error {
+	sound, err := m.GetSound(name)
+	if err != nil {
+		return err
+	} else if sound == nil {
+		return fmt.Errorf("%w: %s", ErrSoundNotFound, name)
+	}
+
+	m.hookMutex.Lock()
+	defer m.hookMutex.Unlock()
+
+	m.hookMap[eventType] = name
+
+	return nil
+}
+
+func (m *Manager) GetSound(name string) (*Sound, error) {
+	m.soundMutex.RLock()
+	defer m.soundMutex.RUnlock()
 
 	sound, ok := m.soundMap[name]
 	if !ok {
-		m.mutex.RUnlock()
-		return fmt.Errorf("sound %q not found", name)
+		return nil, fmt.Errorf("%w: %s", ErrSoundNotFound, name)
 	}
 
-	m.mutex.RUnlock()
+	return sound, nil
+}
+
+func (m *Manager) PlaySound(ctx context.Context, name string) error {
+	sound, err := m.GetSound(name)
+	if err != nil {
+		return err
+	}
 
 	// TODO: beep.Ctrl to kill w/ ctx
 
@@ -92,8 +167,8 @@ func (m *Manager) PlaySound(ctx context.Context, name string) error {
 }
 
 func (m *Manager) Close() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.soundMutex.Lock()
+	defer m.soundMutex.Unlock()
 }
 
 func (m *Manager) loadBuiltins() error {
@@ -109,7 +184,7 @@ func (m *Manager) loadBuiltins() error {
 
 		contents, err := builtinAssets.ReadFile(path)
 		if err != nil {
-			slog.Error("failed to read builtin audio file", "path", path, "error", err)
+			slog.Error("Failed to read builtin audio file", "path", path, "error", err)
 			continue
 		}
 
@@ -117,7 +192,7 @@ func (m *Manager) loadBuiltins() error {
 
 		stream, format, err := m.getStream(entry.Name(), reader)
 		if err != nil {
-			slog.Error("failed to get stream", "path", path, "error", err)
+			slog.Error("Failed to get stream", "path", path, "error", err)
 			continue
 		}
 
@@ -128,7 +203,7 @@ func (m *Manager) loadBuiltins() error {
 		}
 
 		if err := m.addSound(entry.Name(), stream, format); err != nil {
-			slog.Error("failed to add built-in sound", "name", entry.Name(), "error", err)
+			slog.Error("Failed to add built-in sound", "name", entry.Name(), "error", err)
 		}
 	}
 
@@ -175,13 +250,13 @@ func (m *Manager) addSound(name string, stream beep.StreamSeekCloser, format bee
 		return fmt.Errorf("failed to close audio stream after buffering: %w", err)
 	}
 
-	m.mutex.Lock()
-	m.soundMap[name] = Sound{
+	m.soundMutex.Lock()
+	m.soundMap[name] = &Sound{
 		Name:   name,
 		Format: format,
 		Buffer: buffer,
 	}
-	m.mutex.Unlock()
+	m.soundMutex.Unlock()
 
 	return nil
 }
