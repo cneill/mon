@@ -1,6 +1,9 @@
 package main
 
-import "github.com/urfave/cli/v3"
+import (
+	"github.com/cneill/mon/internal/config"
+	"github.com/urfave/cli/v3"
+)
 
 func allFlags() []cli.Flag {
 	flags := make([]cli.Flag, 0, len(generalFlags()))
@@ -11,14 +14,25 @@ func allFlags() []cli.Flag {
 }
 
 const (
+	FlagConfig  = "config"
+	EnvConfig   = "MON_CONFIG"
 	FlagDebug   = "debug"
 	EnvDebug    = "MON_DEBUG"
 	FlagNoColor = "no-color"
 	EnvNoColor  = "MON_NO_COLOR"
+	FlagAudio   = "audio"
+	EnvAudio    = "MON_AUDIO"
 )
 
 func generalFlags() []cli.Flag {
 	return []cli.Flag{
+		&cli.StringFlag{
+			Name:    FlagConfig,
+			Aliases: []string{"c"},
+			Sources: cli.EnvVars(EnvConfig),
+			Value:   config.DefaultConfigPath(),
+			Usage:   "Path to the mon configuration file.",
+		},
 		&cli.BoolFlag{
 			Name:    FlagDebug,
 			Aliases: []string{"D"},
@@ -32,6 +46,13 @@ func generalFlags() []cli.Flag {
 			Sources: cli.EnvVars(EnvNoColor),
 			Value:   false,
 			Usage:   "Disable coloration.",
+		},
+		&cli.BoolFlag{
+			Name:    FlagAudio,
+			Aliases: []string{"A"},
+			Sources: cli.EnvVars(EnvAudio),
+			Value:   false,
+			Usage:   "Enable audio notifications for events.",
 		},
 	}
 }

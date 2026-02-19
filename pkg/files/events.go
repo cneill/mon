@@ -27,8 +27,6 @@ type Event struct {
 
 func (e Event) Type() EventType {
 	switch {
-	case e.Op.Has(fsnotify.Chmod):
-		return EventTypeChmod
 	case e.Op.Has(fsnotify.Create):
 		return EventTypeCreate
 	case e.Op.Has(fsnotify.Remove):
@@ -37,6 +35,8 @@ func (e Event) Type() EventType {
 		return EventTypeRename
 	case e.Op.Has(fsnotify.Write):
 		return EventTypeWrite
+	case e.Op.Has(fsnotify.Chmod):
+		return EventTypeChmod
 	}
 
 	return EventTypeUnknown

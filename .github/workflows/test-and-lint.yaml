@@ -8,6 +8,10 @@ jobs:
   test-and-lint:
     runs-on: ubuntu-latest
     steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt install -y libasound2-dev
+
       - name: Check out repo
         uses: actions/checkout@v5
 
