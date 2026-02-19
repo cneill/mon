@@ -18,6 +18,7 @@ import (
 	"github.com/gopxl/beep/v2/speaker"
 	"github.com/gopxl/beep/v2/vorbis"
 	"github.com/gopxl/beep/v2/wav"
+	"golang.org/x/time/rate"
 )
 
 //go:embed assets/*
@@ -33,6 +34,9 @@ type Manager struct {
 
 	hookMutex sync.RWMutex
 	hookMap   map[EventType]string // value = sound name
+
+	eventChan chan Event
+	limiter   *rate.Limiter
 }
 
 func NewManager(cfg *Config) (*Manager, error) {
@@ -43,8 +47,10 @@ func NewManager(cfg *Config) (*Manager, error) {
 	}
 
 	mgr := &Manager{
-		soundMap: map[string]*Sound{},
-		hookMap:  map[EventType]string{},
+		soundMap:  map[string]*Sound{},
+		hookMap:   map[EventType]string{},
+		eventChan: make(chan Event),
+		limiter:   rate.NewLimiter(5, 1),
 	}
 
 	if err := mgr.loadBuiltins(); err != nil {
@@ -71,12 +77,18 @@ func NewManager(cfg *Config) (*Manager, error) {
 	}
 
 	if sound, ok := mgr.hookMap[EventInit]; ok {
-		if err := mgr.PlaySound(context.Background(), sound); err != nil {
-			slog.Error("Failed to play init sound", "error", err)
-		}
+		go func() {
+			if err := mgr.PlaySound(context.Background(), sound); err != nil {
+				slog.Error("Failed to play init sound", "error", err)
+			}
+		}()
 	}
 
 	return mgr, nil
+}
+
+func (m *Manager) Run(ctx context.Context) {
+	go m.eventLoop(ctx)
 }
 
 // AddSound takes the path to a sound and stores it for use by the Manager based on event hooks.

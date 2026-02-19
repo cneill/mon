@@ -32,18 +32,35 @@ type Event struct {
 	Time time.Time
 }
 
-func (m *Manager) SendEvent(ctx context.Context, e Event) {
-	m.hookMutex.RLock()
-	defer m.hookMutex.RUnlock()
-
-	soundName, ok := m.hookMap[e.Type]
-	if !ok {
+func (m *Manager) SendEvent(ctx context.Context, event Event) {
+	if !m.limiter.Allow() {
 		return
 	}
 
-	go func() {
-		if err := m.PlaySound(ctx, soundName); err != nil {
-			slog.Error("Failed to play sound", "name", soundName, "error", err)
+	select {
+	case <-ctx.Done():
+		return
+	case m.eventChan <- event:
+		slog.Debug("sent sound event", "event", event)
+	}
+}
+
+func (m *Manager) eventLoop(ctx context.Context) {
+	for event := range m.eventChan {
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
-	}()
+		soundName, ok := m.hookMap[event.Type]
+		if !ok {
+			return
+		}
+
+		go func() {
+			if err := m.PlaySound(ctx, soundName); err != nil {
+				slog.Error("Failed to play sound", "name", soundName, "error", err)
+			}
+		}()
+	}
 }

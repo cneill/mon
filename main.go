@@ -89,6 +89,8 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("failed to set up mon: %w", err)
 	}
 
+	mon.AudioManager.Run(ctx)
+
 	defer mon.Teardown()
 
 	if err := mon.Run(ctx); err != nil {

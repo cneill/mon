@@ -52,7 +52,7 @@ type Mon struct {
 
 	fileMonitor  *files.Monitor
 	gitMonitor   *git.Monitor
-	audioManager *audio.Manager
+	AudioManager *audio.Manager
 	writeLimiter *rate.Limiter
 
 	displayChan chan struct{}
@@ -102,7 +102,7 @@ func New(opts *Opts) (*Mon, error) {
 		fileMonitor:  fileMonitor,
 		gitMonitor:   gitMonitor,
 		writeLimiter: rate.NewLimiter(3, 1),
-		audioManager: audioManager,
+		AudioManager: audioManager,
 
 		startTime:   time.Now(),
 		displayChan: make(chan struct{}),
@@ -197,11 +197,11 @@ func (m *Mon) sendFileAudioEvent(ctx context.Context, event files.Event) {
 }
 
 func (m *Mon) sendAudioEvent(ctx context.Context, eventType audio.EventType) {
-	if m.audioManager == nil {
+	if m.AudioManager == nil {
 		return
 	}
 
-	m.audioManager.SendEvent(ctx, audio.Event{
+	m.AudioManager.SendEvent(ctx, audio.Event{
 		Type: eventType,
 		Time: time.Now(),
 	})
@@ -289,7 +289,7 @@ func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 }
 
 func (m *Mon) sendListenerAudioEvents(ctx context.Context, oldDiff, newDiff listeners.Diff) {
-	if m.audioManager == nil {
+	if m.AudioManager == nil {
 		return
 	}
 
