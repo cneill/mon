@@ -18,9 +18,11 @@ import (
 )
 
 type Opts struct {
-	NoColor    bool
-	ProjectDir string
-	Listeners  []listeners.Listener
+	NoColor      bool
+	AudioEnabled bool
+	AudioConfig  *audio.Config
+	ProjectDir   string
+	Listeners    []listeners.Listener
 
 	DetailsOpts *DetailsOpts
 }
@@ -85,10 +87,13 @@ func New(opts *Opts) (*Mon, error) {
 	// Get initial unstaged changes count
 	gitMonitor.Update(context.Background())
 
-	// TODO: supply audio manager options
-	audioManager, err := audio.NewManager(&audio.ManagerOpts{})
-	if err != nil {
-		slog.Error("failed to set up audio manager", "error", err)
+	var audioManager *audio.Manager
+
+	if opts.AudioEnabled {
+		audioManager, err = audio.NewManager(opts.AudioConfig)
+		if err != nil {
+			slog.Error("failed to set up audio manager", "error", err)
+		}
 	}
 
 	mon := &Mon{
@@ -182,6 +187,26 @@ func (m *Mon) setupListeners() error {
 	return nil
 }
 
+func (m *Mon) sendFileAudioEvent(ctx context.Context, event files.Event) {
+	switch event.Type() { //nolint:exhaustive
+	case files.EventTypeCreate:
+		m.sendAudioEvent(ctx, audio.EventFileCreate)
+	case files.EventTypeRemove:
+		m.sendAudioEvent(ctx, audio.EventFileRemove)
+	}
+}
+
+func (m *Mon) sendAudioEvent(ctx context.Context, eventType audio.EventType) {
+	if m.audioManager == nil {
+		return
+	}
+
+	m.audioManager.SendEvent(ctx, audio.Event{
+		Type: eventType,
+		Time: time.Now(),
+	})
+}
+
 func (m *Mon) handleEvents(ctx context.Context) {
 	for {
 		select {
@@ -203,6 +228,7 @@ func (m *Mon) handleEvents(ctx context.Context) {
 			}
 
 			if event.Type == git.EventTypeNewCommit {
+				m.sendAudioEvent(ctx, audio.EventCommitCreate)
 				m.triggerDisplay()
 			}
 		}
@@ -212,6 +238,8 @@ func (m *Mon) handleEvents(ctx context.Context) {
 func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 	switch event.Type() { //nolint:exhaustive
 	case files.EventTypeCreate, files.EventTypeRemove, files.EventTypeRename:
+		m.sendFileAudioEvent(ctx, event)
+
 		go m.triggerDisplay()
 	case files.EventTypeWrite:
 		m.lastWrite = time.Now()
@@ -220,6 +248,7 @@ func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 
 		if m.writeLimiter.Allow() {
 			m.writeLimiter.Reserve()
+			m.sendAudioEvent(ctx, audio.EventFileWrite)
 
 			select {
 			case <-ctx.Done():
@@ -237,6 +266,8 @@ func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 					continue
 				}
 
+				oldDiff := m.listenerDiffsCached[listener.Name()]
+
 				logErr := listener.LogEvent(listeners.Event{
 					Name:    event.Name,
 					Type:    listeners.EventWrite,
@@ -244,10 +275,41 @@ func (m *Mon) handleFileEvent(ctx context.Context, event files.Event) {
 				})
 				if logErr != nil {
 					slog.Error("failed to log event for listener", "listener", listener.Name(), "error", logErr)
+					continue
 				}
+
+				newDiff := listener.Diff()
+				m.sendListenerAudioEvents(ctx, oldDiff, newDiff)
+				m.listenerDiffsCached[listener.Name()] = newDiff
 
 				slog.Debug("logged update to listened file", "listener", listener.Name(), "path", event.Name)
 			}
 		}
+	}
+}
+
+func (m *Mon) sendListenerAudioEvents(ctx context.Context, oldDiff, newDiff listeners.Diff) {
+	if m.audioManager == nil {
+		return
+	}
+
+	oldNew := oldDiff.DependencyFileDiffs.NumNewDependencies()
+	oldDel := oldDiff.DependencyFileDiffs.NumDeletedDependencies()
+	oldUpd := oldDiff.DependencyFileDiffs.NumUpdatedDependencies()
+
+	newNew := newDiff.DependencyFileDiffs.NumNewDependencies()
+	newDel := newDiff.DependencyFileDiffs.NumDeletedDependencies()
+	newUpd := newDiff.DependencyFileDiffs.NumUpdatedDependencies()
+
+	if newNew > oldNew {
+		m.sendAudioEvent(ctx, audio.EventPackageCreate)
+	}
+
+	if newUpd > oldUpd {
+		m.sendAudioEvent(ctx, audio.EventPackageUpgrade)
+	}
+
+	if newDel > oldDel {
+		m.sendAudioEvent(ctx, audio.EventPackageRemove)
 	}
 }

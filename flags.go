@@ -20,6 +20,8 @@ const (
 	EnvDebug    = "MON_DEBUG"
 	FlagNoColor = "no-color"
 	EnvNoColor  = "MON_NO_COLOR"
+	FlagAudio   = "audio"
+	EnvAudio    = "MON_AUDIO"
 )
 
 func generalFlags() []cli.Flag {
@@ -44,6 +46,13 @@ func generalFlags() []cli.Flag {
 			Sources: cli.EnvVars(EnvNoColor),
 			Value:   false,
 			Usage:   "Disable coloration.",
+		},
+		&cli.BoolFlag{
+			Name:    FlagAudio,
+			Aliases: []string{"A"},
+			Sources: cli.EnvVars(EnvAudio),
+			Value:   false,
+			Usage:   "Enable audio notifications for events.",
 		},
 	}
 }

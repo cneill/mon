@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,44 +20,10 @@ import (
 	"github.com/gopxl/beep/v2/wav"
 )
 
-//go:embed assets/*.wav
+//go:embed assets/*
 var builtinAssets embed.FS
 
 var ErrSoundNotFound = errors.New("sound not found")
-
-type ManagerOpts struct {
-	HookMap map[string]string
-}
-
-func (m *ManagerOpts) OK() error {
-	if m.HookMap == nil {
-		return nil
-	}
-
-	errors := []string{}
-
-	for eventType, path := range m.HookMap {
-		if !ValidEventType(EventType(eventType)) {
-			errors = append(errors, "unknown event type: "+eventType)
-		}
-
-		stat, err := os.Stat(path)
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("failed to stat audio file %s: %v", path, err))
-			continue
-		}
-
-		if !stat.Mode().IsRegular() {
-			errors = append(errors, fmt.Sprintf("file %s is not a regular file", path))
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("options error: %s", strings.Join(errors, "; "))
-	}
-
-	return nil
-}
 
 type Manager struct {
 	soundMutex sync.RWMutex
@@ -68,9 +33,11 @@ type Manager struct {
 	hookMap   map[EventType]string // value = sound name
 }
 
-func NewManager(opts *ManagerOpts) (*Manager, error) {
-	if err := opts.OK(); err != nil {
-		return nil, fmt.Errorf("invalid audio manager options: %w", err)
+func NewManager(cfg *Config) (*Manager, error) {
+	if cfg != nil {
+		if err := cfg.OK(); err != nil {
+			return nil, fmt.Errorf("invalid audio config: %w", err)
+		}
 	}
 
 	mgr := &Manager{
@@ -79,7 +46,22 @@ func NewManager(opts *ManagerOpts) (*Manager, error) {
 	}
 
 	if err := mgr.loadBuiltins(); err != nil {
-		return nil, fmt.Errorf("failed to load built-in sounds")
+		return nil, fmt.Errorf("failed to load built-in sounds: %w", err)
+	}
+
+	mgr.applyDefaults()
+
+	// Apply user overrides from config
+	if cfg != nil {
+		for eventType, path := range cfg.Hooks {
+			if err := mgr.AddSound(path); err != nil {
+				return nil, fmt.Errorf("failed to add sound %q: %w", path, err)
+			}
+
+			if err := mgr.AddEventHook(filepath.Base(path), eventType); err != nil {
+				return nil, fmt.Errorf("failed to add event hook for %q: %w", eventType, err)
+			}
+		}
 	}
 
 	return mgr, nil
@@ -208,6 +190,20 @@ func (m *Manager) loadBuiltins() error {
 	}
 
 	return nil
+}
+
+func (m *Manager) applyDefaults() {
+	m.hookMutex.Lock()
+	defer m.hookMutex.Unlock()
+
+	// Apply default hooks
+	m.hookMap[EventCommitCreate] = "commit_create.mp3"
+	m.hookMap[EventFileCreate] = "file_create.mp3"
+	m.hookMap[EventFileRemove] = "file_remove.mp3"
+	m.hookMap[EventFileWrite] = "file_write.mp3"
+	m.hookMap[EventPackageCreate] = "package_create.mp3"
+	m.hookMap[EventPackageRemove] = "package_remove.mp3"
+	m.hookMap[EventPackageUpgrade] = "package_upgrade.mp3"
 }
 
 func (m *Manager) getStream(name string, reader io.ReadCloser) (beep.StreamSeekCloser, beep.Format, error) {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/cneill/mon/internal/config"
 	"github.com/cneill/mon/internal/version"
 	"github.com/cneill/mon/pkg/listeners"
 	"github.com/cneill/mon/pkg/listeners/golang"
@@ -62,9 +63,12 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("invalid project path %q: %w", rawProjectDir, err)
 	}
 
+	cfg := loadConfig(cmd.String(FlagConfig))
+
 	opts := &mon.Opts{
-		NoColor:    cmd.Bool(FlagNoColor),
-		ProjectDir: projectDir,
+		NoColor:      cmd.Bool(FlagNoColor),
+		AudioEnabled: cmd.Bool(FlagAudio),
+		ProjectDir:   projectDir,
 		Listeners: []listeners.Listener{
 			golang.New(),
 			npm.New(),
@@ -74,6 +78,10 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 		DetailsOpts: &mon.DetailsOpts{
 			ShowAllFiles: cmd.Bool(FlagShowAllFiles),
 		},
+	}
+
+	if cfg != nil && cfg.Audio != nil {
+		opts.AudioConfig = cfg.Audio
 	}
 
 	mon, err := mon.New(opts) //nolint:contextcheck
@@ -88,6 +96,17 @@ func setupMon(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return nil
+}
+
+func loadConfig(configPath string) *config.Config {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		slog.Debug("no config file loaded, using defaults", "error", err)
+
+		return nil
+	}
+
+	return cfg
 }
 
 func setupLogging(cmd *cli.Command) (*os.File, error) {
@@ -119,26 +138,4 @@ func main() {
 	if err := run(context.Background()); err != nil {
 		log.Fatalf("ERROR: %v", err)
 	}
-
-	// mgr, err := audio.NewManager()
-	// if err != nil {
-	// 	panic(err)
-	// }
-	//
-	// defer mgr.Close()
-	//
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	// defer cancel()
-	//
-	// if err := mgr.PlaySound(ctx, "protoss_upgrade_complete.wav"); err != nil {
-	// 	panic(err)
-	// }
-	//
-	// if err := mgr.PlaySound(ctx, "terran_upgrade_complete.wav"); err != nil {
-	// 	panic(err)
-	// }
-	//
-	// if err := mgr.PlaySound(ctx, "terran_upgrade_complete.wav"); err != nil {
-	// 	panic(err)
-	// }
 }

@@ -17,8 +17,10 @@ type Config struct {
 }
 
 func (c *Config) OK() error {
-	if err := c.Audio.OK(); err != nil {
-		return fmt.Errorf("error with audio config: %w", err)
+	if c.Audio != nil {
+		if err := c.Audio.OK(); err != nil {
+			return fmt.Errorf("error with audio config: %w", err)
+		}
 	}
 
 	return nil
