@@ -26,6 +26,7 @@ var builtinAssets embed.FS
 
 var ErrSoundNotFound = errors.New("sound not found")
 
+//nolint:gochecknoglobals
 var speakerSampleRate beep.SampleRate
 
 type Manager struct {
