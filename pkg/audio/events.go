@@ -10,6 +10,7 @@ import (
 type EventType string
 
 const (
+	EventInit           EventType = "init"
 	EventCommitCreate   EventType = "commit_create"
 	EventFileCreate     EventType = "file_create"
 	EventFileWrite      EventType = "file_write"
@@ -21,7 +22,7 @@ const (
 
 func ValidEventType(eventType EventType) bool {
 	return slices.Contains([]EventType{
-		EventCommitCreate, EventFileCreate, EventFileWrite, EventFileRemove,
+		EventInit, EventCommitCreate, EventFileCreate, EventFileWrite, EventFileRemove,
 		EventPackageCreate, EventPackageUpgrade, EventPackageRemove,
 	}, eventType)
 }

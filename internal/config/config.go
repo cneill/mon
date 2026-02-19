@@ -53,6 +53,8 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("error with config file: %w", err)
 	}
 
+	slog.Debug("Loaded config file", "path", path)
+
 	return cfg, nil
 }
 
@@ -64,7 +66,7 @@ func DefaultConfigDir() string {
 		return ""
 	}
 
-	return filepath.Join(home, ".config", "aimon")
+	return filepath.Join(home, ".config", "mon")
 }
 
 // DefaultConfigPath returns the default configuration file path ($HOME/.config/aimon/config.json)

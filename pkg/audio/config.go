@@ -12,7 +12,15 @@ type Config struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		Hooks: map[EventType]string{},
+		Hooks: map[EventType]string{
+			EventCommitCreate:   "",
+			EventFileCreate:     "",
+			EventFileRemove:     "",
+			EventFileWrite:      "",
+			EventPackageCreate:  "",
+			EventPackageRemove:  "",
+			EventPackageUpgrade: "",
+		},
 	}
 }
 
@@ -26,6 +34,10 @@ func (c *Config) OK() error {
 	for eventType, path := range c.Hooks {
 		if !ValidEventType(eventType) {
 			errors = append(errors, fmt.Sprintf("unknown event type: %s", eventType))
+		}
+
+		if path == "" {
+			continue
 		}
 
 		stat, err := os.Stat(path)

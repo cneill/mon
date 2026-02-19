@@ -25,6 +25,8 @@ var builtinAssets embed.FS
 
 var ErrSoundNotFound = errors.New("sound not found")
 
+var speakerSampleRate beep.SampleRate
+
 type Manager struct {
 	soundMutex sync.RWMutex
 	soundMap   map[string]*Sound
@@ -54,6 +56,10 @@ func NewManager(cfg *Config) (*Manager, error) {
 	// Apply user overrides from config
 	if cfg != nil {
 		for eventType, path := range cfg.Hooks {
+			if path == "" {
+				continue
+			}
+
 			if err := mgr.AddSound(path); err != nil {
 				return nil, fmt.Errorf("failed to add sound %q: %w", path, err)
 			}
@@ -61,6 +67,12 @@ func NewManager(cfg *Config) (*Manager, error) {
 			if err := mgr.AddEventHook(filepath.Base(path), eventType); err != nil {
 				return nil, fmt.Errorf("failed to add event hook for %q: %w", eventType, err)
 			}
+		}
+	}
+
+	if sound, ok := mgr.hookMap[EventInit]; ok {
+		if err := mgr.PlaySound(context.Background(), sound); err != nil {
+			slog.Error("Failed to play init sound", "error", err)
 		}
 	}
 
@@ -182,6 +194,8 @@ func (m *Manager) loadBuiltins() error {
 			if err := speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/20)); err != nil {
 				return fmt.Errorf("failed to initialize speaker: %w", err)
 			}
+
+			speakerSampleRate = format.SampleRate
 		}
 
 		if err := m.addSound(entry.Name(), stream, format); err != nil {
@@ -240,7 +254,9 @@ func (m *Manager) getStream(name string, reader io.ReadCloser) (beep.StreamSeekC
 
 func (m *Manager) addSound(name string, stream beep.StreamSeekCloser, format beep.Format) error {
 	buffer := beep.NewBuffer(format)
-	buffer.Append(stream)
+	resampledStream := beep.Resample(4, format.SampleRate, speakerSampleRate, stream)
+
+	buffer.Append(resampledStream)
 
 	if err := stream.Close(); err != nil {
 		return fmt.Errorf("failed to close audio stream after buffering: %w", err)
