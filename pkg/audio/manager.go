@@ -40,6 +40,7 @@ type Manager struct {
 	limiter   *rate.Limiter
 }
 
+//nolint:cyclop
 func NewManager(cfg *Config) (*Manager, error) {
 	if cfg != nil {
 		if err := cfg.OK(); err != nil {
