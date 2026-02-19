@@ -52,6 +52,7 @@ func (m *Manager) eventLoop(ctx context.Context) {
 			return
 		default:
 		}
+
 		soundName, ok := m.hookMap[event.Type]
 		if !ok {
 			return
