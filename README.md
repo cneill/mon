@@ -53,6 +53,29 @@ Press `Ctrl+C` when done to see the session summary.
 - **Node.js** - `package.json`
 - **Python** - `requirements.txt`, `pyproject.toml`
 
+## Audio
+
+You can tell `mon` to play sounds on certain events like new commits, packages being added, files being written, etc.
+with the `--audio` / `-A` flag. There are some default sounds, but you can also provide the paths to your own sounds for
+various events in the `mon` configuration file, `~/.config/mon/config.json`, like so:
+
+```json
+{
+  "audio": {
+    "hooks": {
+      "init": "[full_path]",
+      "commit_create": "",
+      "file_create": "",
+      "file_remove": "",
+      "file_write": "",
+      "package_create": "",
+      "package_remove": "",
+      "package_upgrade": ""
+    }
+  }
+}
+```
+
 ## Screenshots
 
 **While running:**
@@ -66,6 +89,7 @@ Press `Ctrl+C` when done to see the session summary.
 ## Flags
 
 ```
+--audio, -A      Play sounds based on events
 --debug, -D      Write debug logs to mon_debug.log
 --no-color, -C   Disable colored output
 --all-files, -F  Show all file paths in final stats
