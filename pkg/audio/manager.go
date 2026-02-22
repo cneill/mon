@@ -247,7 +247,7 @@ func (m *Manager) getStream(name string, reader io.ReadCloser) (beep.StreamSeekC
 	case ".ogg":
 		stream, format, err = vorbis.Decode(reader)
 		if err != nil {
-			return stream, format, fmt.Errorf("failed to decode file as mp3: %w", err)
+			return stream, format, fmt.Errorf("failed to decode file as ogg: %w", err)
 		}
 	case ".wav":
 		stream, format, err = wav.Decode(reader)
