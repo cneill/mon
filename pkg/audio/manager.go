@@ -219,6 +219,7 @@ func (m *Manager) applyDefaults() {
 	defer m.hookMutex.Unlock()
 
 	// Apply default hooks
+	m.hookMap[EventInit] = "init.mp3"
 	m.hookMap[EventCommitCreate] = "commit_create.mp3"
 	m.hookMap[EventFileCreate] = "file_create.mp3"
 	m.hookMap[EventFileRemove] = "file_remove.mp3"
