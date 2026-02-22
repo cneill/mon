@@ -10,12 +10,11 @@ builds:
       - linux
       - darwin
     goarch:
-      - '386'
       - arm64
       - amd64
-    ignore:
-      - goos: darwin
-        goarch: '386'
+    # ignore:
+    #   - goos: darwin
+    #     goarch: '386'
     ldflags:
       - -s -w -X github.com/cneill/mon/internal/version.Version={{.Version}} -X github.com/cneill/mon/internal/version.Commit={{.ShortCommit}} -X github.com/cneill/mon/internal/version.Date={{.Date}}
 archives:
