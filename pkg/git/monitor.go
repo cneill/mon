@@ -108,6 +108,7 @@ func (m *Monitor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
+		// m.fileMonitor tracks file events on the git log file
 		case event, ok := <-m.fileMonitor.Events:
 			if !ok {
 				slog.Info("git log events channel closed")
@@ -125,6 +126,8 @@ func (m *Monitor) Run(ctx context.Context) {
 				}
 			}
 
+		// FileEvents come in from the broader file monitor, we use them to update the lines modified/etc stats for
+		// git-tracked files, if they are tracked by git
 		case event, ok := <-m.FileEvents:
 			if !ok {
 				slog.Info("file events channel closed")
@@ -147,8 +150,12 @@ func (m *Monitor) Run(ctx context.Context) {
 	}
 }
 
+// Update tracks the number of commits since the original commit, as well as changes to git-tracked files.
 func (m *Monitor) Update(ctx context.Context) {
-	slog.Debug("Processing git change")
+	slog.Debug("Updating git status")
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	commits, err := CommitsSince(m.repo, m.initialHash)
 	if err != nil {
@@ -156,9 +163,23 @@ func (m *Monitor) Update(ctx context.Context) {
 		return
 	}
 
-	m.mutex.Lock()
-	m.numCommits = int64(len(commits))
-	m.mutex.Unlock()
+	updatedNumCommits := int64(len(commits))
+
+	if updatedNumCommits != m.numCommits {
+		go func() {
+			gitEvent := Event{
+				Type: EventTypeNewCommit,
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case m.GitEvents <- gitEvent:
+			}
+		}()
+	}
+
+	m.numCommits = updatedNumCommits
 
 	newHash, err := GetHEADSHA(m.repo)
 	if err != nil {
@@ -185,16 +206,6 @@ func (m *Monitor) Update(ctx context.Context) {
 	m.unstagedChanges = unstagedCount
 
 	m.lastProcessedHash = newHash
-
-	event := Event{
-		Type: EventTypeNewCommit,
-	}
-
-	select {
-	case <-ctx.Done():
-		return
-	case m.GitEvents <- event:
-	}
 }
 
 func (m *Monitor) Close() {
@@ -209,12 +220,12 @@ func (m *Monitor) updateTrackedFiles() error {
 
 	m.gitFiles = map[string]struct{}{}
 
-	initialFiles, err := ListFiles(m.repo)
+	currentFiles, err := ListFiles(m.repo)
 	if err != nil {
-		return fmt.Errorf("failed to list initial files: %w", err)
+		return fmt.Errorf("failed to list git-tracked files: %w", err)
 	}
 
-	for _, file := range initialFiles {
+	for _, file := range currentFiles {
 		m.gitFiles[file] = struct{}{}
 	}
 

@@ -84,9 +84,6 @@ func New(opts *Opts) (*Mon, error) {
 		return nil, fmt.Errorf("failed to set up git monitor: %w", err)
 	}
 
-	// Get initial unstaged changes count
-	gitMonitor.Update(context.Background())
-
 	var audioManager *audio.Manager
 
 	if opts.AudioEnabled {
