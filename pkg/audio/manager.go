@@ -78,13 +78,7 @@ func NewManager(cfg *Config) (*Manager, error) {
 		}
 	}
 
-	if sound, ok := mgr.hookMap[EventInit]; ok {
-		go func() {
-			if err := mgr.PlaySound(context.Background(), sound); err != nil {
-				slog.Error("Failed to play init sound", "error", err)
-			}
-		}()
-	}
+	go mgr.SendEvent(context.Background(), Event{Type: EventInit})
 
 	return mgr, nil
 }
