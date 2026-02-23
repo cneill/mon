@@ -45,10 +45,15 @@ jobs:
           sudo apt-get update
           # Add arm64 architecture for cross-compilation
           sudo dpkg --add-architecture arm64
+
           echo "/etc/apt/sources.list.d/ubuntu.sources :"
           cat /etc/apt/sources.list.d/ubuntu.sources
+
           echo "/etc/apt/sources.list :"
           cat /etc/apt/sources.list
+
+          echo "/etc/apt/apt-mirrors.txt : "
+          cat /etc/apt/apt-mirrors.txt
           # Add arm64 sources (Ubuntu Ports)
           # echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted universe multiverse" \
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted" \
