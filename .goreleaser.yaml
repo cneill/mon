@@ -5,7 +5,7 @@ builds:
     main: .
     binary: mon
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos:
       - linux
       - darwin
@@ -17,6 +17,16 @@ builds:
     #     goarch: '386'
     ldflags:
       - -s -w -X github.com/cneill/mon/internal/version.Version={{.Version}} -X github.com/cneill/mon/internal/version.Commit={{.ShortCommit}} -X github.com/cneill/mon/internal/version.Date={{.Date}}
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CC=aarch64-linux-gnu-gcc
 archives:
   - id: mon
     ids:
