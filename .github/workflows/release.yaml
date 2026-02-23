@@ -42,22 +42,18 @@ jobs:
 
       - name: Install Linux dependencies
         run: |
-          sudo apt-get update
-          # Add arm64 architecture for cross-compilation
           sudo dpkg --add-architecture arm64
-
-          echo "/etc/apt/sources.list.d/ubuntu.sources :"
-          cat /etc/apt/sources.list.d/ubuntu.sources
-
-          echo "/etc/apt/sources.list :"
-          cat /etc/apt/sources.list
-
-          echo "/etc/apt/apt-mirrors.txt : "
-          cat /etc/apt/apt-mirrors.txt
-          # Add arm64 sources (Ubuntu Ports)
-          # echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted universe multiverse" \
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted" \
-            | sudo tee /etc/apt/sources.list.d/arm64.list
+          # Restrict existing sources (Azure/standard mirrors) to amd64 only —
+          # they don't carry arm64 packages and will 404 if apt asks for them.
+          sudo sed -i 's/^Types: deb/Architectures: amd64 i386\nTypes: deb/' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          # Add arm64 sources from Ubuntu Ports (the canonical arm64 mirror).
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted universe multiverse" \
+            | sudo tee /etc/apt/sources.list.d/arm64-ports.list
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-security main restricted universe multiverse" \
+            | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-updates main restricted universe multiverse" \
+            | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
           sudo apt-get update
           sudo apt-get install -y \
             libasound2-dev \
