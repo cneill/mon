@@ -154,6 +154,7 @@ jobs:
           for variant_dir in dist/dist-*; do
             os_arch=${variant_dir#dist/dist-}  # e.g. linux-amd64, darwin-arm64
             binary=$(find "$variant_dir" -type f -name 'mon' | head -1)
+            chmod u+x $binary
             cp README.md LICENSE "$(dirname "$binary")/"
             tar -czf "release-assets/mon_${os_arch}.tar.gz" \
               -C "$(dirname "$binary")" mon README.md LICENSE
