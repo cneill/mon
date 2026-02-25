@@ -225,7 +225,7 @@ func (m *Mon) handleEvents(ctx context.Context) {
 			}
 
 			if event.Type == git.EventTypeNewCommit {
-				m.sendAudioEvent(ctx, audio.EventCommitCreate)
+				m.sendAudioEvent(ctx, audio.EventGitCommitCreate)
 				m.triggerDisplay()
 			}
 		}

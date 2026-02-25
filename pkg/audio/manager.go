@@ -40,7 +40,6 @@ type Manager struct {
 	limiter   *rate.Limiter
 }
 
-//nolint:cyclop
 func NewManager(cfg *Config) (*Manager, error) {
 	if cfg != nil {
 		if err := cfg.OK(); err != nil {
@@ -220,7 +219,7 @@ func (m *Manager) applyDefaults() {
 
 	// Apply default hooks
 	m.hookMap[EventInit] = "init.mp3"
-	m.hookMap[EventCommitCreate] = "commit_create.mp3"
+	m.hookMap[EventGitCommitCreate] = "git_commit_create.mp3"
 	m.hookMap[EventFileCreate] = "file_create.mp3"
 	m.hookMap[EventFileRemove] = "file_remove.mp3"
 	m.hookMap[EventFileWrite] = "file_write.mp3"

@@ -64,7 +64,7 @@ various events in the `mon` configuration file, `~/.config/mon/config.json`, lik
   "audio": {
     "hooks": {
       "init": "[full_path]",
-      "commit_create": "",
+      "git_commit_create": "",
       "file_create": "",
       "file_remove": "",
       "file_write": "",

@@ -10,19 +10,20 @@ import (
 type EventType string
 
 const (
-	EventInit           EventType = "init"
-	EventCommitCreate   EventType = "commit_create"
-	EventFileCreate     EventType = "file_create"
-	EventFileWrite      EventType = "file_write"
-	EventFileRemove     EventType = "file_remove"
-	EventPackageCreate  EventType = "package_create"
-	EventPackageUpgrade EventType = "package_upgrade"
-	EventPackageRemove  EventType = "package_remove"
+	EventInit            EventType = "init"
+	EventGitCommitCreate EventType = "git_commit_create"
+	EventGitCommitPush   EventType = "git_commit_push"
+	EventFileCreate      EventType = "file_create"
+	EventFileWrite       EventType = "file_write"
+	EventFileRemove      EventType = "file_remove"
+	EventPackageCreate   EventType = "package_create"
+	EventPackageUpgrade  EventType = "package_upgrade"
+	EventPackageRemove   EventType = "package_remove"
 )
 
 func ValidEventType(eventType EventType) bool {
 	return slices.Contains([]EventType{
-		EventInit, EventCommitCreate, EventFileCreate, EventFileWrite, EventFileRemove,
+		EventInit, EventGitCommitCreate, EventGitCommitPush, EventFileCreate, EventFileWrite, EventFileRemove,
 		EventPackageCreate, EventPackageUpgrade, EventPackageRemove,
 	}, eventType)
 }

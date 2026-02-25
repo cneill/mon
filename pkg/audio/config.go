@@ -13,13 +13,13 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Hooks: map[EventType]string{
-			EventCommitCreate:   "",
-			EventFileCreate:     "",
-			EventFileRemove:     "",
-			EventFileWrite:      "",
-			EventPackageCreate:  "",
-			EventPackageRemove:  "",
-			EventPackageUpgrade: "",
+			EventGitCommitCreate: "",
+			EventFileCreate:      "",
+			EventFileRemove:      "",
+			EventFileWrite:       "",
+			EventPackageCreate:   "",
+			EventPackageRemove:   "",
+			EventPackageUpgrade:  "",
 		},
 	}
 }
