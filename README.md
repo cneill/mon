@@ -65,6 +65,7 @@ various events in the `mon` configuration file, `~/.config/mon/config.json`, lik
     "hooks": {
       "init": "[full_path]",
       "git_commit_create": "",
+      "git_push": "",
       "file_create": "",
       "file_remove": "",
       "file_write": "",

@@ -5,9 +5,9 @@ import "time"
 type EventType string
 
 const (
-	EventTypeUnknown    EventType = "unknown"
-	EventTypeNewCommit  EventType = "new commit"
-	EventTypeCommitPush EventType = "commit push"
+	EventTypeUnknown   EventType = "unknown"
+	EventTypeNewCommit EventType = "new commit"
+	EventTypePush      EventType = "push"
 )
 
 type Event struct {

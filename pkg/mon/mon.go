@@ -228,7 +228,7 @@ func (m *Mon) handleEvents(ctx context.Context) {
 			case git.EventTypeNewCommit:
 				m.sendAudioEvent(ctx, audio.EventGitCommitCreate)
 				m.triggerDisplay()
-			case git.EventTypeCommitPush:
+			case git.EventTypePush:
 				m.sendAudioEvent(ctx, audio.EventGitCommitPush)
 			}
 		}
