@@ -23,6 +23,15 @@ func OpenGitRepo(path string) (*git.Repository, error) {
 	return repo, nil
 }
 
+func CurrentBranch(repo *git.Repository) (plumbing.ReferenceName, error) {
+	head, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD for repo: %w", err)
+	}
+
+	return head.Name(), nil
+}
+
 func GetHEADSHA(repo *git.Repository) (string, error) {
 	headRef, err := repo.Head()
 	if err != nil {
