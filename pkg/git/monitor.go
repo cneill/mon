@@ -155,7 +155,7 @@ func (m *Monitor) Run(ctx context.Context) {
 						slog.Error("failed to read git remote log file", "error", err)
 					}
 
-					lines := bytes.Split(contents, []byte("\n"))
+					lines := bytes.Split(bytes.TrimRight(contents, "\n"), []byte("\n"))
 					if bytes.Contains(lines[len(lines)-1], []byte("update by push")) { // default for push in reflog
 						go m.pushEvent(ctx, EventTypeCommitPush)
 					}
