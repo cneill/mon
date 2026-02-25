@@ -12,7 +12,7 @@ type EventType string
 const (
 	EventInit            EventType = "init"
 	EventGitCommitCreate EventType = "git_commit_create"
-	EventGitCommitPush   EventType = "git_commit_push"
+	EventGitCommitPush   EventType = "git_push"
 	EventFileCreate      EventType = "file_create"
 	EventFileWrite       EventType = "file_write"
 	EventFileRemove      EventType = "file_remove"

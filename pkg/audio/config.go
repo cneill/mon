@@ -14,6 +14,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Hooks: map[EventType]string{
 			EventGitCommitCreate: "",
+			EventGitCommitPush:   "",
 			EventFileCreate:      "",
 			EventFileRemove:      "",
 			EventFileWrite:       "",

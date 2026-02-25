@@ -224,9 +224,12 @@ func (m *Mon) handleEvents(ctx context.Context) {
 				return
 			}
 
-			if event.Type == git.EventTypeNewCommit {
+			switch event.Type { //nolint:exhaustive
+			case git.EventTypeNewCommit:
 				m.sendAudioEvent(ctx, audio.EventGitCommitCreate)
 				m.triggerDisplay()
+			case git.EventTypePush:
+				m.sendAudioEvent(ctx, audio.EventGitCommitPush)
 			}
 		}
 	}

@@ -1,12 +1,14 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/cneill/mon/pkg/files"
 	"github.com/go-git/go-git/v5"
@@ -28,9 +30,10 @@ type Monitor struct {
 	FileEvents chan files.Event
 	GitEvents  chan Event
 
-	gitLogPath  string
-	fileMonitor *files.Monitor
-	repo        *git.Repository
+	gitLogPath       string
+	gitRemoteLogPath string
+	fileMonitor      *files.Monitor
+	repo             *git.Repository
 
 	mutex             sync.RWMutex
 	initialHash       string
@@ -66,6 +69,20 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 		return nil, fmt.Errorf("git logs not found at %s", gitLogPath)
 	}
 
+	currentBranch, err := CurrentBranch(repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	gitRemoteLogPath, err := filepath.Abs(filepath.Join(opts.RootPath, ".git", "logs", "refs", "remotes", git.DefaultRemoteName, currentBranch.Short()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get path to remote git log: %w", err)
+	}
+
+	if _, err := os.Stat(gitRemoteLogPath); err != nil {
+		return nil, fmt.Errorf("git remote logs not found at %s", gitRemoteLogPath)
+	}
+
 	fm, err := files.NewMonitor(&files.MonitorOpts{
 		RootPath:    opts.RootPath,
 		WatchRoot:   false,
@@ -79,13 +96,18 @@ func NewMonitor(opts *MonitorOpts) (*Monitor, error) {
 		return nil, fmt.Errorf("failed to set up monitoring for git log file: %w", err)
 	}
 
+	if err := fm.WatchFile(gitRemoteLogPath, true); err != nil {
+		return nil, fmt.Errorf("failed to set up monitoring for git remote log file: %w", err)
+	}
+
 	monitor := &Monitor{
 		FileEvents: make(chan files.Event, 10),
 		GitEvents:  make(chan Event, 10),
 
-		gitLogPath:  gitLogPath,
-		fileMonitor: fm,
-		repo:        repo,
+		gitLogPath:       gitLogPath,
+		gitRemoteLogPath: gitRemoteLogPath,
+		fileMonitor:      fm,
+		repo:             repo,
 
 		initialHash: initialHash,
 		gitFiles:    map[string]struct{}{},
@@ -115,14 +137,28 @@ func (m *Monitor) Run(ctx context.Context) {
 				return
 			}
 
-			switch event.Type() { //nolint:exhaustive
-			case files.EventTypeChmod, files.EventTypeWrite:
-				slog.Debug("Updating due to git log update", "event", event)
+			if event.Type() == files.EventTypeWrite {
+				switch event.Name {
+				case m.gitLogPath:
+					slog.Debug("Updating due to git log update", "event", event)
 
-				go m.Update(ctx)
+					go m.Update(ctx)
 
-				if err := m.updateTrackedFiles(); err != nil {
-					slog.Error("failed to update list of tracked files after git log update")
+					if err := m.updateTrackedFiles(); err != nil {
+						slog.Error("failed to update list of tracked files after git log update")
+					}
+				case m.gitRemoteLogPath:
+					slog.Debug("Got remote update, checking for push...")
+
+					contents, err := os.ReadFile(m.gitRemoteLogPath)
+					if err != nil {
+						slog.Error("failed to read git remote log file", "error", err)
+					}
+
+					lines := bytes.Split(bytes.TrimRight(contents, "\n"), []byte("\n"))
+					if bytes.Contains(lines[len(lines)-1], []byte("update by push")) { // default for push in reflog
+						go m.pushEvent(ctx, EventTypePush)
+					}
 				}
 			}
 
@@ -166,17 +202,7 @@ func (m *Monitor) Update(ctx context.Context) {
 	updatedNumCommits := int64(len(commits))
 
 	if updatedNumCommits != m.numCommits {
-		go func() {
-			gitEvent := Event{
-				Type: EventTypeNewCommit,
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case m.GitEvents <- gitEvent:
-			}
-		}()
+		go m.pushEvent(ctx, EventTypeNewCommit)
 	}
 
 	m.numCommits = updatedNumCommits
@@ -212,6 +238,26 @@ func (m *Monitor) Close() {
 	// close(m.FileEvents)
 	close(m.GitEvents)
 	m.fileMonitor.Close()
+}
+
+func (m *Monitor) pushEvent(ctx context.Context, eventType EventType) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	gitEvent := Event{
+		Time: time.Now(),
+		Type: eventType,
+	}
+
+	select {
+	case <-ctx.Done():
+		if err := ctx.Err(); err != nil {
+			slog.Error("context error pushing event from git monitor", "error", err)
+		}
+
+		return
+	case m.GitEvents <- gitEvent:
+	}
 }
 
 func (m *Monitor) updateTrackedFiles() error {
