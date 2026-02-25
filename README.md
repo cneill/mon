@@ -64,14 +64,14 @@ various events in the `mon` configuration file, `~/.config/mon/config.json`, lik
   "audio": {
     "hooks": {
       "init": "[full_path]",
-      "git_commit_create": "",
-      "git_push": "",
-      "file_create": "",
-      "file_remove": "",
-      "file_write": "",
-      "package_create": "",
-      "package_remove": "",
-      "package_upgrade": ""
+      "git_commit_create": "[full_path]",
+      "git_push": "[full_path]",
+      "file_create": "[full_path]",
+      "file_remove": "[full_path]",
+      "file_write": "[full_path]",
+      "package_create": "[full_path]",
+      "package_remove": "[full_path]",
+      "package_upgrade": "[full_path]"
     }
   }
 }
